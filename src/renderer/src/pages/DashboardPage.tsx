@@ -3,6 +3,7 @@ import {
   ClipboardList, BookOpen,
   Users, CheckSquare, Sparkles, FileText, CalendarCheck,
 } from 'lucide-react'
+import { useEditorTheme } from '@/lib/editor-theme-context'
 
 const sections = [
   {
@@ -83,6 +84,7 @@ const sections = [
  * @returns The rendered dashboard.
  */
 export default function DashboardPage(): React.JSX.Element {
+  const { profile } = useEditorTheme()
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
 
@@ -97,7 +99,7 @@ export default function DashboardPage(): React.JSX.Element {
       {/* Hero greeting */}
       <div className="space-y-2 pt-4">
         <h1 className="bg-gradient-to-b from-foreground to-muted-foreground bg-clip-text text-3xl font-extrabold tracking-tight text-transparent sm:text-4xl">
-          {greeting}, Aman.
+          {greeting}{profile.displayName ? `, ${profile.displayName}` : ''}.
         </h1>
         <p className="text-base text-muted-foreground">
           Here&rsquo;s your workspace. Pick a section to get started.

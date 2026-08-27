@@ -71,36 +71,42 @@ function parentDir(path: string): string {
 }
 
 /** Flatten a tree into a list of file paths in display order. */
-function flattenFilePaths(entries: VaultEntry[], expandedSet: Set<string>): string[] {
+function flattenFilePaths(entries: VaultEntry[], expandedDirs: Set<string>): string[] {
   const result: string[] = []
   for (const e of entries) {
     if (e.type === 'file') {
       result.push(e.path)
-    } else if (e.children && expandedSet.has(e.path)) {
-      result.push(...flattenFilePaths(e.children, expandedSet))
+    } else if (e.children && expandedDirs.has(e.path)) {
+      result.push(...flattenFilePaths(e.children, expandedDirs))
     }
   }
   return result
 }
 
-// ─── Selection context ─────────────────────────────────────────────────────
+// ─── Tree context (shared state for selection + expand/collapse) ────────────
 
-interface SelectionContextValue {
+interface TreeContextValue {
+  // Selection
   selected: Set<string>
   lastClicked: string | null
   toggleSelect: (path: string, e: React.MouseEvent) => void
   clearSelection: () => void
   isSelected: (path: string) => boolean
-  collapseRevision: number
+  // Expand/collapse
+  expandedDirs: Set<string>
+  toggleExpanded: (path: string) => void
+  setExpanded: (path: string, open: boolean) => void
 }
 
-const SelectionContext = createContext<SelectionContextValue>({
+const TreeContext = createContext<TreeContextValue>({
   selected: new Set(),
   lastClicked: null,
   toggleSelect: () => {},
   clearSelection: () => {},
   isSelected: () => false,
-  collapseRevision: 0,
+  expandedDirs: new Set(),
+  toggleExpanded: () => {},
+  setExpanded: () => {},
 })
 
 // ─── Inline name input ──────────────────────────────────────────────────────
@@ -223,20 +229,14 @@ interface FileTreeNodeProps {
  */
 function FileTreeNode({ entry, depth }: FileTreeNodeProps): React.JSX.Element {
   const { openFilePath, openFile, createFile, createDirectory, deleteFile, deleteDirectory, renameFile, copyFile, refreshTree } = useVault()
-  const { selected, toggleSelect, isSelected, collapseRevision } = useContext(SelectionContext)
-
-  // Reset expanded state when collapseRevision changes (collapse all)
-  const [expandedMap, setExpandedMap] = useState<Record<number, boolean>>({})
-  const expanded = expandedMap[collapseRevision] ?? depth < 1
-  const setExpanded = useCallback((val: boolean) => {
-    setExpandedMap((prev) => ({ ...prev, [collapseRevision]: val }))
-  }, [collapseRevision])
+  const { selected, toggleSelect, isSelected, expandedDirs, toggleExpanded, setExpanded: setDirExpanded } = useContext(TreeContext)
 
   const [creatingFile, setCreatingFile] = useState<'file' | 'diagram' | 'deck' | null>(null)
   const [creatingFolder, setCreatingFolder] = useState(false)
   const [renaming, setRenaming] = useState(false)
   const [dragOver, setDragOver] = useState(false)
 
+  const expanded = expandedDirs.has(entry.path)
   const isActive = entry.type === 'file' && openFilePath === entry.path
   const isMultiSelected = isSelected(entry.path)
   const multiCount = selected.size
@@ -265,32 +265,21 @@ function FileTreeNode({ entry, depth }: FileTreeNodeProps): React.JSX.Element {
     setDragOver(false)
     const sourcePath = e.dataTransfer.getData('text/plain')
     if (!sourcePath || sourcePath === entry.path) return
-
-    // Don't drop into self or a child of self
     if (entry.path.startsWith(sourcePath + '/')) return
-
     const name = fileName(sourcePath)
     const newPath = `${entry.path}/${name}`
-
-    // Don't drop if already in this folder
     if (parentDir(sourcePath) === entry.path) return
-
     try {
       await renameFile(sourcePath, newPath)
-      setExpanded(true)
-    } catch {
-      /* move failed — name collision, etc. */
-    }
-  }, [entry.path, renameFile, setExpanded])
+      setDirExpanded(entry.path, true)
+    } catch { /* move failed */ }
+  }, [entry.path, renameFile, setDirExpanded])
 
   /** Delete all selected files. */
   const deleteSelected = useCallback(async () => {
     const paths = Array.from(selected)
     for (const p of paths) {
-      try {
-        await window.api.vault.deleteFile(p)
-      } catch {
-        /* some might be directories or already deleted */
+      try { await window.api.vault.deleteFile(p) } catch {
         try { await window.api.vault.deleteDirectory(p) } catch { /* ignore */ }
       }
     }
@@ -335,7 +324,7 @@ function FileTreeNode({ entry, depth }: FileTreeNodeProps): React.JSX.Element {
                 <button
                   type="button"
                   className="flex flex-1 items-center gap-1.5 truncate text-left"
-                  onClick={() => setExpanded(!expanded)}
+                  onClick={() => toggleExpanded(entry.path)}
                 >
                   <ChevronIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                   <FolderIcon className="h-4 w-4 shrink-0 text-amber-500" />
@@ -347,16 +336,16 @@ function FileTreeNode({ entry, depth }: FileTreeNodeProps): React.JSX.Element {
 
           <ContextMenuPrimitive.Portal>
             <ContextMenuPrimitive.Content className="z-50 min-w-48 rounded-md border bg-popover p-1 text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95">
-              <ContextMenuPrimitive.Item className={ctxItemClass} onClick={() => { setCreatingFile('file'); setExpanded(true) }}>
+              <ContextMenuPrimitive.Item className={ctxItemClass} onClick={() => { setCreatingFile('file'); setDirExpanded(entry.path, true) }}>
                 <FileText className="h-4 w-4" /> New file
               </ContextMenuPrimitive.Item>
-              <ContextMenuPrimitive.Item className={ctxItemClass} onClick={() => { setCreatingFile('diagram'); setExpanded(true) }}>
+              <ContextMenuPrimitive.Item className={ctxItemClass} onClick={() => { setCreatingFile('diagram'); setDirExpanded(entry.path, true) }}>
                 <Network className="h-4 w-4" /> New diagram
               </ContextMenuPrimitive.Item>
-              <ContextMenuPrimitive.Item className={ctxItemClass} onClick={() => { setCreatingFile('deck'); setExpanded(true) }}>
+              <ContextMenuPrimitive.Item className={ctxItemClass} onClick={() => { setCreatingFile('deck'); setDirExpanded(entry.path, true) }}>
                 <Layers className="h-4 w-4" /> New deck
               </ContextMenuPrimitive.Item>
-              <ContextMenuPrimitive.Item className={ctxItemClass} onClick={() => { setCreatingFolder(true); setExpanded(true) }}>
+              <ContextMenuPrimitive.Item className={ctxItemClass} onClick={() => { setCreatingFolder(true); setDirExpanded(entry.path, true) }}>
                 <FolderClosed className="h-4 w-4" /> New folder
               </ContextMenuPrimitive.Item>
               <ContextMenuPrimitive.Separator className={ctxSepClass} />
@@ -532,6 +521,19 @@ function ToolbarButton({
 
 type RootCreate = 'file' | 'diagram' | 'deck' | 'folder' | null
 
+/** Collect all directory paths from a tree. */
+function collectDirPaths(entries: VaultEntry[], depth: number): string[] {
+  const result: string[] = []
+  for (const e of entries) {
+    if (e.type === 'directory') {
+      // Auto-expand depth-0 directories on initial load
+      if (depth < 1) result.push(e.path)
+      if (e.children) result.push(...collectDirPaths(e.children, depth + 1))
+    }
+  }
+  return result
+}
+
 /**
  * The vault file tree panel. Shows the full tree with an icon toolbar
  * at the top, right-click context menus, drag-and-drop, multi-select
@@ -543,20 +545,44 @@ export function VaultFileTree(): React.JSX.Element | null {
   const [creating, setCreating] = useState<RootCreate>(null)
   const [rootDragOver, setRootDragOver] = useState(false)
 
-  // ── Collapse all ──
-  const [collapseRevision, setCollapseRevision] = useState(0)
+  // ── Centralized expand/collapse state ──
+  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(() => {
+    // Auto-expand top-level dirs on mount
+    return new Set(collectDirPaths(tree, 0))
+  })
+
+  const toggleExpanded = useCallback((path: string) => {
+    setExpandedDirs((prev) => {
+      const next = new Set(prev)
+      if (next.has(path)) next.delete(path)
+      else next.add(path)
+      return next
+    })
+  }, [])
+
+  const setDirExpanded = useCallback((path: string, open: boolean) => {
+    setExpandedDirs((prev) => {
+      const next = new Set(prev)
+      if (open) next.add(path)
+      else next.delete(path)
+      return next
+    })
+  }, [])
+
+  /** Collapse all folders. */
+  const collapseAll = useCallback(() => {
+    setExpandedDirs(new Set())
+  }, [])
 
   // ── Multi-select state ──
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [lastClicked, setLastClicked] = useState<string | null>(null)
 
   // Flat list of all visible file paths (for shift-select range)
-  const expandedSet = useMemo(() => new Set<string>(), [])
-  const flatPaths = useMemo(() => flattenFilePaths(tree, expandedSet), [tree, expandedSet])
+  const flatPaths = useMemo(() => flattenFilePaths(tree, expandedDirs), [tree, expandedDirs])
 
   const toggleSelect = useCallback((path: string, e: React.MouseEvent) => {
     if (e.shiftKey && lastClicked) {
-      // Range select
       const startIdx = flatPaths.indexOf(lastClicked)
       const endIdx = flatPaths.indexOf(path)
       if (startIdx !== -1 && endIdx !== -1) {
@@ -570,7 +596,6 @@ export function VaultFileTree(): React.JSX.Element | null {
         })
       }
     } else if (e.ctrlKey || e.metaKey) {
-      // Toggle single
       setSelected((prev) => {
         const next = new Set(prev)
         if (next.has(path)) next.delete(path)
@@ -588,14 +613,16 @@ export function VaultFileTree(): React.JSX.Element | null {
 
   const isSelected = useCallback((path: string) => selected.has(path), [selected])
 
-  const selCtx = useMemo<SelectionContextValue>(() => ({
+  const treeCtx = useMemo<TreeContextValue>(() => ({
     selected,
     lastClicked,
     toggleSelect,
     clearSelection,
     isSelected,
-    collapseRevision,
-  }), [selected, lastClicked, toggleSelect, clearSelection, isSelected, collapseRevision])
+    expandedDirs,
+    toggleExpanded,
+    setExpanded: setDirExpanded,
+  }), [selected, lastClicked, toggleSelect, clearSelection, isSelected, expandedDirs, toggleExpanded, setDirExpanded])
 
   if (!vaultPath) return null
 
@@ -613,7 +640,6 @@ export function VaultFileTree(): React.JSX.Element | null {
     const sourcePath = e.dataTransfer.getData('text/plain')
     if (!sourcePath) return
     const name = sourcePath.split('/').pop() ?? sourcePath
-    // Already at root?
     if (!sourcePath.includes('/')) return
     try {
       await renameFile(sourcePath, name)
@@ -621,14 +647,13 @@ export function VaultFileTree(): React.JSX.Element | null {
   }
 
   return (
-    <SelectionContext.Provider value={selCtx}>
+    <TreeContext.Provider value={treeCtx}>
       <div
         className={cn('flex flex-col gap-1 py-1', rootDragOver && 'bg-primary/5')}
         onDragOver={(e) => { e.preventDefault(); setRootDragOver(true) }}
         onDragLeave={() => setRootDragOver(false)}
         onDrop={(e) => void handleRootDrop(e)}
         onClick={(e) => {
-          // Click on empty space clears multi-select
           if (e.target === e.currentTarget) clearSelection()
         }}
       >
@@ -638,7 +663,7 @@ export function VaultFileTree(): React.JSX.Element | null {
           <ToolbarButton icon={Network} label="New diagram" onClick={() => setCreating('diagram')} />
           <ToolbarButton icon={Layers} label="New deck" onClick={() => setCreating('deck')} />
           <ToolbarButton icon={FolderPlus} label="New folder" onClick={() => setCreating('folder')} />
-          <ToolbarButton icon={ChevronsDownUp} label="Collapse all" onClick={() => setCollapseRevision((r) => r + 1)} />
+          <ToolbarButton icon={ChevronsDownUp} label="Collapse all" onClick={collapseAll} />
         </div>
 
         {/* Selection count bar */}
@@ -686,6 +711,6 @@ export function VaultFileTree(): React.JSX.Element | null {
           <FileTreeNode key={entry.path} entry={entry} depth={0} />
         ))}
       </div>
-    </SelectionContext.Provider>
+    </TreeContext.Provider>
   )
 }

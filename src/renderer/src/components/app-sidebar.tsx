@@ -189,11 +189,11 @@ const INLINE_COLORS: ColorSetting[] = [
 ]
 
 /**
- * Settings panel with Obsidian-style editor colour pickers.
+ * Settings panel with user profile and Obsidian-style editor colour pickers.
  * @returns The rendered settings panel.
  */
 function SettingsPanel(): React.JSX.Element {
-  const { settings, updateSetting, resetToDefaults } = useEditorTheme()
+  const { settings, updateSetting, resetToDefaults, profile, updateProfile } = useEditorTheme()
 
   /** Handle a native colour-picker change. */
   const onColorChange = useCallback(
@@ -205,6 +205,26 @@ function SettingsPanel(): React.JSX.Element {
 
   return (
     <div className="flex flex-col gap-4 px-3 py-4 text-sm">
+      {/* ── Profile ── */}
+      <div>
+        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
+          Profile
+        </p>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-muted-foreground">Display Name</span>
+          <input
+            type="text"
+            value={profile.displayName}
+            onChange={(e) => updateProfile('displayName', e.target.value)}
+            placeholder="Your name"
+            className="h-8 rounded-md border border-input bg-transparent px-2.5 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:border-primary"
+          />
+        </label>
+      </div>
+
+      <div className="border-t border-border" />
+
+      {/* ── Editor Colors ── */}
       <div className="flex items-center justify-between">
         <p className="font-semibold text-foreground">Editor Colors</p>
         <button

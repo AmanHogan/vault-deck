@@ -1,13 +1,13 @@
 /**
- * Editor theme settings context — stores user-configurable colors for
- * markdown headings, bold, italic, etc. Persisted in localStorage.
- * Applied as CSS custom properties on :root so both CodeMirror and the
- * markdown preview can read them.
+ * App settings context — stores user profile (display name) and
+ * editor theme colours. All persisted in localStorage.
+ * Colours are applied as CSS custom properties on :root so CodeMirror
+ * and the markdown preview can read them.
  */
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
 
-// ─── Defaults ────────────────────────────────────────────────────────────────
+// ─── Editor theme defaults ──────────────────────────────────────────────────
 
 export interface EditorThemeSettings {
   h1Color: string
@@ -22,7 +22,7 @@ export interface EditorThemeSettings {
   codeColor: string
 }
 
-const DEFAULTS: EditorThemeSettings = {
+const THEME_DEFAULTS: EditorThemeSettings = {
   h1Color: '#60a5fa',   // blue-400
   h2Color: '#a78bfa',   // violet-400
   h3Color: '#34d399',   // emerald-400
@@ -35,32 +35,61 @@ const DEFAULTS: EditorThemeSettings = {
   codeColor: '#fb923c',  // orange-400
 }
 
-const STORAGE_KEY = 'editor-theme-settings'
+// ─── User profile ───────────────────────────────────────────────────────────
+
+export interface UserProfile {
+  displayName: string
+}
+
+const PROFILE_DEFAULTS: UserProfile = {
+  displayName: 'Aman',
+}
+
+// ─── Storage keys ───────────────────────────────────────────────────────────
+
+const THEME_KEY = 'editor-theme-settings'
+const PROFILE_KEY = 'user-profile'
 
 // ─── Context ─────────────────────────────────────────────────────────────────
 
-interface EditorThemeContextValue {
+interface AppSettingsContextValue {
+  // Editor theme
   settings: EditorThemeSettings
   updateSetting: (key: keyof EditorThemeSettings, value: string) => void
   resetToDefaults: () => void
+  // User profile
+  profile: UserProfile
+  updateProfile: (key: keyof UserProfile, value: string) => void
 }
 
-const EditorThemeContext = createContext<EditorThemeContextValue | null>(null)
+const AppSettingsContext = createContext<AppSettingsContextValue | null>(null)
 
 /**
- * Read the stored settings or fall back to defaults.
+ * Read editor theme from localStorage or fall back to defaults.
  * @returns The editor theme settings.
  */
-function loadSettings(): EditorThemeSettings {
+function loadTheme(): EditorThemeSettings {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) return { ...DEFAULTS, ...JSON.parse(raw) as Partial<EditorThemeSettings> }
+    const raw = localStorage.getItem(THEME_KEY)
+    if (raw) return { ...THEME_DEFAULTS, ...JSON.parse(raw) as Partial<EditorThemeSettings> }
   } catch { /* ignore */ }
-  return { ...DEFAULTS }
+  return { ...THEME_DEFAULTS }
 }
 
 /**
- * Apply settings as CSS custom properties on the document root.
+ * Read user profile from localStorage or fall back to defaults.
+ * @returns The user profile.
+ */
+function loadProfile(): UserProfile {
+  try {
+    const raw = localStorage.getItem(PROFILE_KEY)
+    if (raw) return { ...PROFILE_DEFAULTS, ...JSON.parse(raw) as Partial<UserProfile> }
+  } catch { /* ignore */ }
+  return { ...PROFILE_DEFAULTS }
+}
+
+/**
+ * Apply editor theme settings as CSS custom properties on :root.
  * @param s The settings object.
  */
 function applyToDOM(s: EditorThemeSettings): void {
@@ -78,31 +107,42 @@ function applyToDOM(s: EditorThemeSettings): void {
 }
 
 /**
- * Provider that loads/saves editor theme settings and applies them as CSS vars.
+ * Provider that loads/saves all app settings (profile + editor theme)
+ * and applies editor colours as CSS custom properties.
  * @param props Children.
  * @returns The provider element.
  */
 export function EditorThemeProvider({ children }: { children: ReactNode }): React.JSX.Element {
-  const [settings, setSettings] = useState<EditorThemeSettings>(loadSettings)
+  const [settings, setSettings] = useState<EditorThemeSettings>(loadTheme)
+  const [profile, setProfile] = useState<UserProfile>(loadProfile)
 
-  // Apply on mount and whenever settings change
+  // Apply theme on mount and whenever settings change
   useEffect(() => {
     applyToDOM(settings)
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)) } catch { /* ignore */ }
+    try { localStorage.setItem(THEME_KEY, JSON.stringify(settings)) } catch { /* ignore */ }
   }, [settings])
+
+  // Persist profile changes
+  useEffect(() => {
+    try { localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)) } catch { /* ignore */ }
+  }, [profile])
 
   const updateSetting = useCallback((key: keyof EditorThemeSettings, value: string) => {
     setSettings((prev) => ({ ...prev, [key]: value }))
   }, [])
 
   const resetToDefaults = useCallback(() => {
-    setSettings({ ...DEFAULTS })
+    setSettings({ ...THEME_DEFAULTS })
+  }, [])
+
+  const updateProfile = useCallback((key: keyof UserProfile, value: string) => {
+    setProfile((prev) => ({ ...prev, [key]: value }))
   }, [])
 
   return (
-    <EditorThemeContext.Provider value={{ settings, updateSetting, resetToDefaults }}>
+    <AppSettingsContext.Provider value={{ settings, updateSetting, resetToDefaults, profile, updateProfile }}>
       {children}
-    </EditorThemeContext.Provider>
+    </AppSettingsContext.Provider>
   )
 }
 
@@ -111,8 +151,8 @@ export function EditorThemeProvider({ children }: { children: ReactNode }): Reac
  * @returns The editor theme context value.
  */
 // eslint-disable-next-line react-refresh/only-export-components
-export function useEditorTheme(): EditorThemeContextValue {
-  const ctx = useContext(EditorThemeContext)
+export function useEditorTheme(): AppSettingsContextValue {
+  const ctx = useContext(AppSettingsContext)
   if (!ctx) throw new Error('useEditorTheme must be used within EditorThemeProvider')
   return ctx
 }
