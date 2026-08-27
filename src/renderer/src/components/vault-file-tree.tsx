@@ -521,19 +521,6 @@ function ToolbarButton({
 
 type RootCreate = 'file' | 'diagram' | 'deck' | 'folder' | null
 
-/** Collect all directory paths from a tree. */
-function collectDirPaths(entries: VaultEntry[], depth: number): string[] {
-  const result: string[] = []
-  for (const e of entries) {
-    if (e.type === 'directory') {
-      // Auto-expand depth-0 directories on initial load
-      if (depth < 1) result.push(e.path)
-      if (e.children) result.push(...collectDirPaths(e.children, depth + 1))
-    }
-  }
-  return result
-}
-
 /**
  * The vault file tree panel. Shows the full tree with an icon toolbar
  * at the top, right-click context menus, drag-and-drop, multi-select
@@ -545,11 +532,8 @@ export function VaultFileTree(): React.JSX.Element | null {
   const [creating, setCreating] = useState<RootCreate>(null)
   const [rootDragOver, setRootDragOver] = useState(false)
 
-  // ── Centralized expand/collapse state ──
-  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(() => {
-    // Auto-expand top-level dirs on mount
-    return new Set(collectDirPaths(tree, 0))
-  })
+  // ── Centralized expand/collapse state (all collapsed by default) ──
+  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(() => new Set())
 
   const toggleExpanded = useCallback((path: string) => {
     setExpandedDirs((prev) => {
