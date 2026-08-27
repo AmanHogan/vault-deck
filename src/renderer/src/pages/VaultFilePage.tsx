@@ -23,6 +23,8 @@ import { DeckEditor } from '@/components/deck-editor'
 import { Markdown } from '@/components/markdown'
 import { DocxViewer } from '@/components/docx-viewer'
 import { XlsxViewer } from '@/components/xlsx-viewer'
+import { ExcalidrawEditor } from '@/components/excalidraw-editor'
+import { CanvasEditor } from '@/components/canvas/canvas-editor'
 import { Save, Eye, EyeOff, ExternalLink, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react'
 
 /** Debounce delay for auto-save (ms). */
@@ -48,6 +50,8 @@ export default function VaultFilePage(): React.JSX.Element | null {
   const ext = openFilePath ? '.' + (openFilePath.split('.').pop()?.toLowerCase() ?? '') : ''
   const isMarkdown = ext === '.md' || ext === '.txt'
   const isDiagram = ext === '.diagram'
+  const isExcalidraw = ext === '.excalidraw'
+  const isCanvas = ext === '.canvas'
   const isDeck = ext === '.deck'
   const isPdf = ext === '.pdf'
   const isImage = IMAGE_EXTS.has(ext)
@@ -155,6 +159,24 @@ export default function VaultFilePage(): React.JSX.Element | null {
     return (
       <div className="flex-1 overflow-hidden">
         <DiagramCanvas filePath={openFilePath} />
+      </div>
+    )
+  }
+
+  // ── Excalidraw ──
+  if (isExcalidraw) {
+    return (
+      <div className="flex-1 overflow-hidden">
+        <ExcalidrawEditor filePath={openFilePath} />
+      </div>
+    )
+  }
+
+  // ── Canvas ──
+  if (isCanvas) {
+    return (
+      <div className="flex-1 overflow-hidden">
+        <CanvasEditor filePath={openFilePath} />
       </div>
     )
   }

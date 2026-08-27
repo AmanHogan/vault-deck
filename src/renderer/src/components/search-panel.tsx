@@ -7,7 +7,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useVault } from '@/lib/vault-context'
 import {
-  Search, FileText, Folder, Network, Layers, Tag, X,
+  Search, FileText, Folder, Network, Layers, PenTool, LayoutDashboard, Tag, X,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils'
 interface SearchResult {
   path: string
   name: string
-  type: 'file' | 'directory' | 'deck' | 'diagram'
+  type: 'file' | 'directory' | 'deck' | 'diagram' | 'excalidraw' | 'canvas'
   snippet: string
 }
 
@@ -30,9 +30,11 @@ interface TagInfo {
 
 /** Return the right icon component for a search result type / extension. */
 function ResultIcon({ result }: { result: SearchResult }): React.JSX.Element {
-  if (result.type === 'directory') return <Folder className="h-4 w-4 shrink-0 text-amber-500" />
-  if (result.type === 'deck') return <Layers className="h-4 w-4 shrink-0 text-purple-400" />
-  if (result.type === 'diagram') return <Network className="h-4 w-4 shrink-0 text-blue-400" />
+  if (result.type === 'directory') return <Folder className="h-4 w-4 shrink-0" style={{ color: 'var(--icon-folder)' }} />
+  if (result.type === 'deck') return <Layers className="h-4 w-4 shrink-0" style={{ color: 'var(--icon-deck)' }} />
+  if (result.type === 'diagram') return <Network className="h-4 w-4 shrink-0" style={{ color: 'var(--icon-diagram)' }} />
+  if (result.type === 'excalidraw') return <PenTool className="h-4 w-4 shrink-0" style={{ color: 'var(--icon-excalidraw)' }} />
+  if (result.type === 'canvas') return <LayoutDashboard className="h-4 w-4 shrink-0" style={{ color: 'var(--icon-canvas)' }} />
   return <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
 }
 

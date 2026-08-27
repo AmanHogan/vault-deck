@@ -24,6 +24,7 @@ import {
   FilePlus,
   Network,
   Layers,
+  PenTool,
   RotateCcw,
   type LucideIcon,
 } from 'lucide-react'
@@ -188,6 +189,16 @@ const INLINE_COLORS: ColorSetting[] = [
   { key: 'codeColor', label: 'Code' },
 ]
 
+const ICON_COLORS: ColorSetting[] = [
+  { key: 'folderColor', label: 'Folder' },
+  { key: 'diagramColor', label: 'Diagram' },
+  { key: 'excalidrawColor', label: 'Drawing' },
+  { key: 'canvasColor', label: 'Canvas' },
+  { key: 'deckColor', label: 'Deck' },
+  { key: 'imageColor', label: 'Image' },
+  { key: 'documentColor', label: 'Document' },
+]
+
 /**
  * Settings panel with user profile and Obsidian-style editor colour pickers.
  * @returns The rendered settings panel.
@@ -298,6 +309,49 @@ function SettingsPanel(): React.JSX.Element {
           <span style={{ color: settings.codeColor }}>`inline code`</span>
         </div>
       </div>
+
+      <div className="border-t border-border" />
+
+      {/* ── Icon Colors ── */}
+      <div>
+        <p className="mb-2 font-semibold text-foreground">Icon Colors</p>
+        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
+          File Types
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          {ICON_COLORS.map(({ key, label }) => (
+            <label key={key} className="flex items-center gap-1.5 cursor-pointer group">
+              <input
+                type="color"
+                value={settings[key]}
+                onChange={onColorChange(key)}
+                className="h-6 w-6 shrink-0 cursor-pointer rounded border border-border bg-transparent p-0 [&::-webkit-color-swatch-wrapper]:p-0.5 [&::-webkit-color-swatch]:rounded-sm [&::-webkit-color-swatch]:border-none"
+              />
+              <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors">
+                {label}
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Accent / Highlight ── */}
+      <div>
+        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
+          Accent / Highlight
+        </p>
+        <label className="flex items-center gap-1.5 cursor-pointer group">
+          <input
+            type="color"
+            value={settings.accentColor}
+            onChange={onColorChange('accentColor')}
+            className="h-6 w-6 shrink-0 cursor-pointer rounded border border-border bg-transparent p-0 [&::-webkit-color-swatch-wrapper]:p-0.5 [&::-webkit-color-swatch]:rounded-sm [&::-webkit-color-swatch]:border-none"
+          />
+          <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors">
+            Accent Color
+          </span>
+        </label>
+      </div>
     </div>
   )
 }
@@ -386,6 +440,28 @@ export function AppSidebar(): React.JSX.Element {
     openFile(actual)
   }
 
+  /** Create a new Excalidraw drawing. */
+  async function newDrawing(): Promise<void> {
+    const existing = collectNames(tree)
+    let n = 1
+    while (existing.has(`Untitled ${n}.excalidraw`)) n++
+    const name = `Untitled ${n}.excalidraw`
+    const content = JSON.stringify({ type: 'excalidraw', version: 2, source: 'commitments-app', elements: [], appState: { viewBackgroundColor: '#1e1e1e' }, files: {} }, null, 2)
+    const actual = await createFile(name, content)
+    openFile(actual)
+  }
+
+  /** Create a new Obsidian-compatible canvas. */
+  async function newCanvas(): Promise<void> {
+    const existing = collectNames(tree)
+    let n = 1
+    while (existing.has(`Untitled ${n}.canvas`)) n++
+    const name = `Untitled ${n}.canvas`
+    const content = JSON.stringify({ nodes: [], edges: [] }, null, 2)
+    const actual = await createFile(name, content)
+    openFile(actual)
+  }
+
   return (
     <div className="flex h-full">
       {/* ── Icon rail ───────────────────────────────────────────────── */}
@@ -427,6 +503,30 @@ export function AppSidebar(): React.JSX.Element {
               </button>
             </TooltipTrigger>
             <TooltipContent side="right" sideOffset={6}>New flashcard deck</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => void newDrawing()}
+                className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+              >
+                <PenTool className="h-[18px] w-[18px]" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={6}>New drawing</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => void newCanvas()}
+                className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+              >
+                <LayoutDashboard className="h-[18px] w-[18px]" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={6}>New canvas</TooltipContent>
           </Tooltip>
         </div>
 

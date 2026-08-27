@@ -327,7 +327,7 @@ function FileTreeNode({ entry, depth }: FileTreeNodeProps): React.JSX.Element {
                   onClick={() => toggleExpanded(entry.path)}
                 >
                   <ChevronIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  <FolderIcon className="h-4 w-4 shrink-0 text-amber-500" />
+                  <FolderIcon className="h-4 w-4 shrink-0" style={{ color: 'var(--icon-folder)' }} />
                   <span className="truncate">{entry.name}</span>
                 </button>
               )}

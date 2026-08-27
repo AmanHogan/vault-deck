@@ -60,7 +60,7 @@ export interface VaultEntry {
 }
 
 /** Recognized workspace file extensions */
-const WORKSPACE_EXTENSIONS = new Set(['.md', '.diagram', '.deck', '.txt'])
+const WORKSPACE_EXTENSIONS = new Set(['.md', '.diagram', '.deck', '.excalidraw', '.canvas', '.txt'])
 
 /** Extensions to show in the file tree (workspace files + common media) */
 const VISIBLE_EXTENSIONS = new Set([
@@ -450,6 +450,18 @@ export const vault = {
                 if (nameMatch || snippet) {
                   results.push({ path: rel, name: entry.name, type: 'diagram', snippet: snippet ?? '' })
                 }
+              } else if (ext === '.excalidraw') {
+                // Excalidraw files are JSON — search element text values
+                const snippet = searchExcalidrawContent(content, q)
+                if (nameMatch || snippet) {
+                  results.push({ path: rel, name: entry.name, type: 'excalidraw', snippet: snippet ?? '' })
+                }
+              } else if (ext === '.canvas') {
+                // Canvas files are JSON — search text node content and group labels
+                const snippet = searchCanvasContent(content, q)
+                if (nameMatch || snippet) {
+                  results.push({ path: rel, name: entry.name, type: 'canvas', snippet: snippet ?? '' })
+                }
               } else {
                 const snippet = searchTextContent(content, q)
                 if (nameMatch || snippet) {
@@ -520,7 +532,7 @@ export const vault = {
 export interface SearchResult {
   path: string
   name: string
-  type: 'file' | 'directory' | 'deck' | 'diagram'
+  type: 'file' | 'directory' | 'deck' | 'diagram' | 'excalidraw' | 'canvas'
   snippet: string
 }
 
@@ -531,7 +543,7 @@ export interface TagInfo {
 }
 
 /** Extensions whose content we read for search / tag extraction. */
-const SEARCHABLE_EXTENSIONS = new Set(['.md', '.txt', '.deck', '.diagram', '.json', '.csv'])
+const SEARCHABLE_EXTENSIONS = new Set(['.md', '.txt', '.deck', '.diagram', '.excalidraw', '.canvas', '.json', '.csv'])
 
 /** Extract a snippet of surrounding text around the first match. */
 function searchTextContent(content: string, query: string): string | null {
@@ -569,6 +581,33 @@ function searchDiagramContent(content: string, query: string): string | null {
     for (const node of diagram.nodes ?? []) {
       if (node.data?.label?.toLowerCase().includes(query)) return `Node: ${node.data.label}`
       if (node.data?.description?.toLowerCase().includes(query)) return `Node desc: ${node.data.description.slice(0, 80)}`
+    }
+  } catch { /* not valid JSON */ }
+  return searchTextContent(content, query)
+}
+
+/** Search inside a .excalidraw JSON file's elements for matching text. */
+function searchExcalidrawContent(content: string, query: string): string | null {
+  try {
+    const data = JSON.parse(content) as { elements?: { text?: string; type?: string }[] }
+    for (const el of data.elements ?? []) {
+      if (el.text && el.text.toLowerCase().includes(query)) {
+        return `Text: ${el.text.slice(0, 80)}`
+      }
+    }
+  } catch { /* not valid JSON */ }
+  return searchTextContent(content, query)
+}
+
+/** Search inside a .canvas JSON file's nodes for matching text/labels. */
+function searchCanvasContent(content: string, query: string): string | null {
+  try {
+    const data = JSON.parse(content) as { nodes?: { type?: string; text?: string; label?: string; file?: string; url?: string }[] }
+    for (const node of data.nodes ?? []) {
+      if (node.text && node.text.toLowerCase().includes(query)) return `Card: ${node.text.slice(0, 80)}`
+      if (node.label && node.label.toLowerCase().includes(query)) return `Group: ${node.label}`
+      if (node.file && node.file.toLowerCase().includes(query)) return `File: ${node.file}`
+      if (node.url && node.url.toLowerCase().includes(query)) return `Link: ${node.url.slice(0, 80)}`
     }
   } catch { /* not valid JSON */ }
   return searchTextContent(content, query)

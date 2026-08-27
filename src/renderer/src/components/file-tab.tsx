@@ -6,7 +6,7 @@
 
 import { useState, useCallback, useRef } from 'react'
 import { useVault } from '@/lib/vault-context'
-import { FileText, Network, Layers, FileSpreadsheet, Image, File, X, Plus } from 'lucide-react'
+import { FileText, Network, Layers, FileSpreadsheet, Image, File, X, Plus, PenTool, LayoutDashboard } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { VaultEntry } from '@/types/types'
 
@@ -55,27 +55,32 @@ function nextUntitledName(tree: VaultEntry[]): string {
  */
 function TabIcon({ filePath }: { filePath: string }): React.JSX.Element {
   const ext = filePath.split('.').pop()?.toLowerCase() ?? ''
+  const base = 'h-3.5 w-3.5 shrink-0'
   switch (ext) {
     case 'diagram':
-      return <Network className="h-3.5 w-3.5 shrink-0 text-blue-400" />
+      return <Network className={base} style={{ color: 'var(--icon-diagram)' }} />
+    case 'excalidraw':
+      return <PenTool className={base} style={{ color: 'var(--icon-excalidraw)' }} />
+    case 'canvas':
+      return <LayoutDashboard className={base} style={{ color: 'var(--icon-canvas)' }} />
     case 'deck':
-      return <Layers className="h-3.5 w-3.5 shrink-0 text-purple-400" />
+      return <Layers className={base} style={{ color: 'var(--icon-deck)' }} />
     case 'md':
     case 'txt':
-      return <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      return <FileText className={`${base} text-muted-foreground`} />
     case 'pdf':
     case 'pptx':
     case 'docx':
-      return <FileSpreadsheet className="h-3.5 w-3.5 shrink-0 text-orange-400" />
+      return <FileSpreadsheet className={base} style={{ color: 'var(--icon-document)' }} />
     case 'png':
     case 'jpg':
     case 'jpeg':
     case 'gif':
     case 'svg':
     case 'webp':
-      return <Image className="h-3.5 w-3.5 shrink-0 text-green-400" />
+      return <Image className={base} style={{ color: 'var(--icon-image)' }} />
     default:
-      return <File className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      return <File className={`${base} text-muted-foreground`} />
   }
 }
 
