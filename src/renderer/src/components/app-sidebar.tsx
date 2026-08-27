@@ -369,75 +369,81 @@ export function AppSidebar(): React.JSX.Element {
   return (
     <div className="flex h-full">
       {/* ── Icon rail ───────────────────────────────────────────────── */}
-      <div className="flex w-12 flex-col items-center gap-1 border-r border-sidebar-border bg-sidebar pt-9">
-        {railIcons.map(({ id, label, icon: Icon }) => {
-          const active = activePanel === id
-          return (
-            <Tooltip key={id}>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={() => setActivePanel(id)}
-                  className={cn(
-                    'flex h-9 w-9 items-center justify-center rounded-md transition-colors',
-                    active
-                      ? 'bg-sidebar-accent text-foreground'
-                      : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground'
-                  )}
-                >
-                  <Icon className="h-[18px] w-[18px]" />
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="right" sideOffset={6}>
-                {label}
-              </TooltipContent>
-            </Tooltip>
-          )
-        })}
-      </div>
-
-      {/* ── Content panel (resizable) ──────────────────────────────── */}
-      <div className="relative flex flex-col overflow-hidden bg-sidebar" style={{ width: panelWidth }}>
-        {/* Quick-create buttons — left-aligned, always visible */}
-        <div className="flex items-center gap-1 border-b border-sidebar-border px-2 py-1.5">
+      <div className="flex w-12 flex-col items-center border-r border-sidebar-border bg-sidebar pt-9">
+        {/* Quick-create buttons at the top */}
+        <div className="flex flex-col items-center gap-1 mb-2">
           <Tooltip>
             <TooltipTrigger asChild>
               <button
                 type="button"
                 onClick={() => void newNote()}
-                className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+                className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
               >
-                <FilePlus className="h-[15px] w-[15px]" />
+                <FilePlus className="h-[18px] w-[18px]" />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={4}>New note</TooltipContent>
+            <TooltipContent side="right" sideOffset={6}>New note</TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
               <button
                 type="button"
                 onClick={() => void newDiagram()}
-                className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+                className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
               >
-                <Network className="h-[15px] w-[15px]" />
+                <Network className="h-[18px] w-[18px]" />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={4}>New diagram</TooltipContent>
+            <TooltipContent side="right" sideOffset={6}>New diagram</TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
               <button
                 type="button"
                 onClick={() => void newDeck()}
-                className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+                className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
               >
-                <Layers className="h-[15px] w-[15px]" />
+                <Layers className="h-[18px] w-[18px]" />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="bottom" sideOffset={4}>New flashcard deck</TooltipContent>
+            <TooltipContent side="right" sideOffset={6}>New flashcard deck</TooltipContent>
           </Tooltip>
         </div>
 
+        {/* Divider between create buttons and navigation */}
+        <div className="mb-1 w-6 border-t border-sidebar-border" />
+
+        {/* Panel-switching icons */}
+        <div className="flex flex-col items-center gap-1">
+          {railIcons.map(({ id, label, icon: Icon }) => {
+            const active = activePanel === id
+            return (
+              <Tooltip key={id}>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => setActivePanel(id)}
+                    className={cn(
+                      'flex h-9 w-9 items-center justify-center rounded-md transition-colors',
+                      active
+                        ? 'bg-sidebar-accent text-foreground'
+                        : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground'
+                    )}
+                  >
+                    <Icon className="h-[18px] w-[18px]" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right" sideOffset={6}>
+                  {label}
+                </TooltipContent>
+              </Tooltip>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* ── Content panel (resizable) ──────────────────────────────── */}
+      <div className="relative flex flex-col overflow-hidden bg-sidebar" style={{ width: panelWidth }}>
         <div className="flex-1 overflow-auto">
           {activePanel === 'files' && <FilesPanel />}
           {activePanel === 'search' && <SearchPanel />}

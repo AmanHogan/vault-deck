@@ -221,11 +221,14 @@ export default function VaultFilePage(): React.JSX.Element | null {
     )
   }
 
+  const fileName = openFilePath.split('/').pop() ?? openFilePath
+
   // ── Text editor (MD, TXT, JSON, CSV, etc.) ──
   return (
     <div className="flex h-full flex-col">
-      {/* Toolbar row — preview toggle + save indicator */}
-      <div className="flex items-center gap-2 border-b border-border px-4 py-1.5">
+      {/* Toolbar row — filename on left, preview + save on right */}
+      <div className="flex items-center gap-2 border-b border-border px-3 py-1">
+        <span className="truncate text-xs font-medium text-muted-foreground">{fileName}</span>
         <div className="flex-1" />
 
         {isMarkdown && (

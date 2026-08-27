@@ -1,10 +1,10 @@
 /**
  * Browser-style tab bar for open files. Supports multiple tabs, click
- * to switch, X to close, and a "+" button that instantly creates a new
- * "Untitled N.md" note and opens it in a new tab.
+ * to switch, X to close, right-click context menu with "Close All",
+ * a "+" button that creates a new note, and vertical resize.
  */
 
-import { useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { useVault } from '@/lib/vault-context'
 import { FileText, Network, Layers, FileSpreadsheet, Image, File, X, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -79,15 +79,51 @@ function TabIcon({ filePath }: { filePath: string }): React.JSX.Element {
   }
 }
 
+// ─── Constants ─────────────────────────────────────────────────────────────
+
+const MIN_HEIGHT = 34
+const MAX_HEIGHT = 120
+const DEFAULT_HEIGHT = 40
+
 // ─── Component ──────────────────────────────────────────────────────────────
 
 /**
  * Browser-style tab bar. Shows one tab per open file, highlights the
- * active tab, and has a "+" button that instantly creates a new note.
+ * active tab, has a "+" button for new notes, right-click "Close All",
+ * and is vertically resizable via a bottom drag handle.
  * @returns The rendered tab bar.
  */
 export function FileTab(): React.JSX.Element {
-  const { openTabs, openFilePath, switchTab, closeTab, tree, createFile, openFile } = useVault()
+  const { openTabs, openFilePath, switchTab, closeTab, closeAllTabs, tree, createFile, openFile } = useVault()
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; tabPath: string } | null>(null)
+
+  // ── Resizable height ──────────────────────────────────────────
+  const [barHeight, setBarHeight] = useState(DEFAULT_HEIGHT)
+  const dragging = useRef(false)
+
+  const onDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    dragging.current = true
+    const startY = e.clientY
+    const startH = barHeight
+
+    const onMove = (ev: MouseEvent): void => {
+      if (!dragging.current) return
+      const delta = ev.clientY - startY
+      setBarHeight(Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, startH + delta)))
+    }
+    const onUp = (): void => {
+      dragging.current = false
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+    document.body.style.cursor = 'row-resize'
+    document.body.style.userSelect = 'none'
+  }, [barHeight])
 
   /** Create a new Untitled note and open it, just like clicking "+" in a browser. */
   const handleNewTab = useCallback(async (): Promise<void> => {
@@ -96,53 +132,117 @@ export function FileTab(): React.JSX.Element {
     openFile(actual)
   }, [tree, createFile, openFile])
 
-  return (
-    <div className="flex h-10 items-end border-b border-border bg-[#0e0e0e] pl-1 pr-[140px] titlebar-drag">
-      {/* Tab list + "+" button — scrolls together so "+" stays after the last tab */}
-      <div className="flex min-w-0 items-end gap-0.5 overflow-x-auto titlebar-nodrag">
-        {openTabs.map((tabPath) => {
-          const isActive = tabPath === openFilePath
-          const fileName = tabPath.split('/').pop() ?? tabPath
-          return (
-            <div
-              key={tabPath}
-              className={cn(
-                'group flex h-[34px] max-w-[200px] shrink-0 cursor-pointer items-center gap-1.5 rounded-t-lg border border-b-0 px-3 text-[13px] transition-colors',
-                isActive
-                  ? 'border-border bg-background text-foreground'
-                  : 'border-transparent bg-transparent text-muted-foreground hover:bg-card/50 hover:text-foreground'
-              )}
-              onClick={() => switchTab(tabPath)}
-            >
-              <TabIcon filePath={tabPath} />
-              <span className="truncate">{fileName}</span>
-              <button
-                type="button"
-                className={cn(
-                  'ml-auto flex h-4 w-4 shrink-0 items-center justify-center rounded-sm transition-colors',
-                  isActive
-                    ? 'text-muted-foreground hover:bg-accent hover:text-foreground'
-                    : 'opacity-0 group-hover:opacity-100 text-muted-foreground hover:bg-accent hover:text-foreground'
-                )}
-                onClick={(e) => { e.stopPropagation(); closeTab(tabPath) }}
-                title="Close tab"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
-          )
-        })}
+  /** Show context menu on right-click. */
+  const handleContextMenu = useCallback((e: React.MouseEvent, tabPath: string) => {
+    e.preventDefault()
+    setCtxMenu({ x: e.clientX, y: e.clientY, tabPath })
+  }, [])
 
-        {/* "+" new tab button — flows inline with tabs */}
-        <button
-          type="button"
-          className="mb-0.5 ml-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-card hover:text-foreground"
-          onClick={() => void handleNewTab()}
-          title="New tab"
-        >
-          <Plus className="h-4 w-4" />
-        </button>
+  /** Dismiss context menu. */
+  const dismissCtx = useCallback(() => setCtxMenu(null), [])
+
+  return (
+    <div className="relative">
+      {/* Tab bar — resizable height, wraps when tall enough */}
+      <div
+        className="flex flex-wrap content-start items-end gap-0.5 border-b border-border bg-[#0e0e0e] pl-1 pr-[140px] overflow-y-auto overflow-x-hidden titlebar-drag"
+        style={{ height: barHeight }}
+      >
+        <div className="flex flex-wrap content-end items-end gap-0.5 min-h-full titlebar-nodrag">
+          {openTabs.map((tabPath) => {
+            const isActive = tabPath === openFilePath
+            const fileName = tabPath.split('/').pop() ?? tabPath
+            return (
+              <div
+                key={tabPath}
+                className={cn(
+                  'group flex h-[34px] max-w-[200px] shrink-0 cursor-pointer items-center gap-1.5 rounded-t-lg border border-b-0 px-3 text-[13px] transition-colors',
+                  isActive
+                    ? 'border-border bg-background text-foreground'
+                    : 'border-transparent bg-transparent text-muted-foreground hover:bg-card/50 hover:text-foreground'
+                )}
+                onClick={() => switchTab(tabPath)}
+                onContextMenu={(e) => handleContextMenu(e, tabPath)}
+              >
+                <TabIcon filePath={tabPath} />
+                <span className="truncate">{fileName}</span>
+                <button
+                  type="button"
+                  className={cn(
+                    'ml-auto flex h-4 w-4 shrink-0 items-center justify-center rounded-sm transition-colors',
+                    isActive
+                      ? 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                      : 'opacity-0 group-hover:opacity-100 text-muted-foreground hover:bg-accent hover:text-foreground'
+                  )}
+                  onClick={(e) => { e.stopPropagation(); closeTab(tabPath) }}
+                  title="Close tab"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )
+          })}
+
+          {/* "+" new tab button — flows inline with tabs */}
+          <button
+            type="button"
+            className="mb-0.5 ml-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-card hover:text-foreground"
+            onClick={() => void handleNewTab()}
+            title="New tab"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+        </div>
       </div>
+
+      {/* Bottom drag handle for resizing */}
+      <div
+        role="separator"
+        aria-orientation="horizontal"
+        onMouseDown={onDragStart}
+        className="absolute bottom-0 left-0 right-0 z-10 h-1 cursor-row-resize transition-colors hover:bg-primary/30 active:bg-primary/50"
+      />
+
+      {/* Right-click context menu */}
+      {ctxMenu && (
+        <>
+          {/* Invisible backdrop to dismiss */}
+          <div className="fixed inset-0 z-50" onClick={dismissCtx} onContextMenu={(e) => { e.preventDefault(); dismissCtx() }} />
+          <div
+            className="fixed z-50 min-w-[160px] rounded-lg border border-border bg-popover py-1 text-sm shadow-xl"
+            style={{ left: ctxMenu.x, top: ctxMenu.y }}
+          >
+            <button
+              type="button"
+              className="flex w-full items-center px-3 py-1.5 text-left text-popover-foreground hover:bg-accent hover:text-foreground"
+              onClick={() => { closeTab(ctxMenu.tabPath); dismissCtx() }}
+            >
+              Close
+            </button>
+            <button
+              type="button"
+              className="flex w-full items-center px-3 py-1.5 text-left text-popover-foreground hover:bg-accent hover:text-foreground"
+              onClick={() => {
+                // Close all tabs except this one
+                for (const t of openTabs) {
+                  if (t !== ctxMenu.tabPath) closeTab(t)
+                }
+                dismissCtx()
+              }}
+            >
+              Close Others
+            </button>
+            <div className="my-1 border-t border-border" />
+            <button
+              type="button"
+              className="flex w-full items-center px-3 py-1.5 text-left text-destructive hover:bg-accent"
+              onClick={() => { closeAllTabs(); dismissCtx() }}
+            >
+              Close All Tabs
+            </button>
+          </div>
+        </>
+      )}
     </div>
   )
 }

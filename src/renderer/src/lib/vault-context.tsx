@@ -31,6 +31,8 @@ interface VaultContextValue {
   openFile: (relPath: string) => void
   /** Close a specific tab by path */
   closeTab: (relPath: string) => void
+  /** Close all open tabs */
+  closeAllTabs: () => void
   /** Close the currently active tab (legacy alias) */
   closeFile: () => void
   /** Deactivate the current tab without closing it (show page content) */
@@ -138,6 +140,12 @@ export function VaultProvider({ children }: { children: ReactNode }): React.JSX.
     })
   }, [])
 
+  /** Close all open tabs. */
+  const closeAllTabs = useCallback(() => {
+    setOpenTabs([])
+    setActiveTab(null)
+  }, [])
+
   /** Close the active tab (legacy alias for components that just call closeFile). */
   const closeFile = useCallback(() => {
     if (activeTab) closeTab(activeTab)
@@ -206,6 +214,7 @@ export function VaultProvider({ children }: { children: ReactNode }): React.JSX.
         openFilePath: activeTab,
         openFile,
         closeTab,
+        closeAllTabs,
         closeFile,
         deactivateFile,
         switchTab,
