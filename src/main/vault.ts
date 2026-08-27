@@ -166,7 +166,7 @@ function startWatcher(vaultPath: string): void {
   let debounceTimer: ReturnType<typeof setTimeout> | null = null
   const debouncedBroadcast = (): void => {
     if (debounceTimer) clearTimeout(debounceTimer)
-    debounceTimer = setTimeout(broadcastTreeChange, 200)
+    debounceTimer = setTimeout(broadcastTreeChange, 500)
   }
 
   watcher = watch(vaultPath, {
@@ -174,6 +174,11 @@ function startWatcher(vaultPath: string): void {
     ignored: [/(^|[/\\])\../, /node_modules/],
     persistent: true,
     depth: 10,
+    // Disable polling — use native OS events (faster, less CPU).
+    // chokidar v5 defaults to native watchers but explicit is safer.
+    usePolling: false,
+    // Wait for writes to finish before firing (helps with OneDrive/Dropbox)
+    awaitWriteFinish: { stabilityThreshold: 300, pollInterval: 100 },
   })
 
   watcher.on('add', debouncedBroadcast)

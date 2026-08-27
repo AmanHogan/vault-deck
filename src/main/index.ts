@@ -7,6 +7,14 @@ import icon from '../../resources/icon.png?asset'
 import { bcomm1, dcomm1, oneOnOne, actionItems, skills, fcSets, fcCards, fcSkills, imageFiles, resumeFiles, noteGroups, notes, quickAccomplishments, periodicReviews } from './database'
 import { vault } from './vault'
 
+// ─── Performance: GPU & rendering ──────────────────────────────────────────
+// Enable hardware acceleration explicitly (Obsidian does this too).
+// On Windows, Chromium sometimes falls back to software rendering without it.
+app.commandLine.appendSwitch('enable-gpu-rasterization')
+app.commandLine.appendSwitch('enable-zero-copy')
+// Use V8 code cache for faster JS startup on subsequent launches
+app.commandLine.appendSwitch('js-flags', '--jitless=false')
+
 // Register before app.whenReady
 protocol.registerSchemesAsPrivileged([
   { scheme: 'local', privileges: { secure: true, standard: true, supportFetchAPI: true, corsEnabled: true } },
@@ -108,7 +116,11 @@ function createWindow(): void {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
       webviewTag: true,
-      spellcheck: true
+      spellcheck: true,
+      // Performance: cache compiled JS across sessions for faster startup
+      v8CacheOptions: 'bypassHeatCheck',
+      // Performance: throttle background tabs to save CPU
+      backgroundThrottling: true,
     }
   })
 

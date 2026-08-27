@@ -15,17 +15,47 @@
  * Auto-saves on change (debounced) and on Cmd/Ctrl+S.
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
 import { useVault } from '@/lib/vault-context'
-import { CodeMirrorEditor } from '@/components/codemirror-editor'
-import { DiagramCanvas } from '@/components/diagram/diagram-canvas'
-import { DeckEditor } from '@/components/deck-editor'
 import { Markdown } from '@/components/markdown'
-import { DocxViewer } from '@/components/docx-viewer'
-import { XlsxViewer } from '@/components/xlsx-viewer'
-import { ExcalidrawEditor } from '@/components/excalidraw-editor'
-import { CanvasEditor } from '@/components/canvas/canvas-editor'
 import { Save, Eye, EyeOff, ExternalLink, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react'
+
+// ── Lazy-loaded editors (code-split into separate chunks) ───────────────────
+// These are the heaviest dependencies in the app. Lazy-loading them means
+// only the editor needed for the active file type is loaded on demand,
+// rather than bundling all ~20 MB of Excalidraw + React Flow + CodeMirror
+// into the initial page load.
+
+const CodeMirrorEditor = lazy(() =>
+  import('@/components/codemirror-editor').then((m) => ({ default: m.CodeMirrorEditor })),
+)
+const DiagramCanvas = lazy(() =>
+  import('@/components/diagram/diagram-canvas').then((m) => ({ default: m.DiagramCanvas })),
+)
+const DeckEditor = lazy(() =>
+  import('@/components/deck-editor').then((m) => ({ default: m.DeckEditor })),
+)
+const DocxViewer = lazy(() =>
+  import('@/components/docx-viewer').then((m) => ({ default: m.DocxViewer })),
+)
+const XlsxViewer = lazy(() =>
+  import('@/components/xlsx-viewer').then((m) => ({ default: m.XlsxViewer })),
+)
+const ExcalidrawEditor = lazy(() =>
+  import('@/components/excalidraw-editor').then((m) => ({ default: m.ExcalidrawEditor })),
+)
+const CanvasEditor = lazy(() =>
+  import('@/components/canvas/canvas-editor').then((m) => ({ default: m.CanvasEditor })),
+)
+
+/** Loading fallback shown while a lazy editor chunk loads. */
+function EditorFallback(): React.JSX.Element {
+  return (
+    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+      Loading editor…
+    </div>
+  )
+}
 
 /** Debounce delay for auto-save (ms). */
 const AUTOSAVE_DELAY = 1000
@@ -157,36 +187,44 @@ export default function VaultFilePage(): React.JSX.Element | null {
   // ── Diagram ──
   if (isDiagram) {
     return (
-      <div className="flex-1 overflow-hidden">
-        <DiagramCanvas filePath={openFilePath} />
-      </div>
+      <Suspense fallback={<EditorFallback />}>
+        <div className="flex-1 overflow-hidden">
+          <DiagramCanvas filePath={openFilePath} />
+        </div>
+      </Suspense>
     )
   }
 
   // ── Excalidraw ──
   if (isExcalidraw) {
     return (
-      <div className="flex-1 overflow-hidden">
-        <ExcalidrawEditor filePath={openFilePath} />
-      </div>
+      <Suspense fallback={<EditorFallback />}>
+        <div className="flex-1 overflow-hidden">
+          <ExcalidrawEditor filePath={openFilePath} />
+        </div>
+      </Suspense>
     )
   }
 
   // ── Canvas ──
   if (isCanvas) {
     return (
-      <div className="flex-1 overflow-hidden">
-        <CanvasEditor filePath={openFilePath} />
-      </div>
+      <Suspense fallback={<EditorFallback />}>
+        <div className="flex-1 overflow-hidden">
+          <CanvasEditor filePath={openFilePath} />
+        </div>
+      </Suspense>
     )
   }
 
   // ── Deck ──
   if (isDeck) {
     return (
-      <div className="flex-1 overflow-y-auto">
-        <DeckEditor filePath={openFilePath} />
-      </div>
+      <Suspense fallback={<EditorFallback />}>
+        <div className="flex-1 overflow-y-auto">
+          <DeckEditor filePath={openFilePath} />
+        </div>
+      </Suspense>
     )
   }
 
@@ -212,12 +250,12 @@ export default function VaultFilePage(): React.JSX.Element | null {
 
   // ── DOCX — inline preview via docx-preview ──
   if (isDocx) {
-    return <DocxViewer filePath={openFilePath} />
+    return <Suspense fallback={<EditorFallback />}><DocxViewer filePath={openFilePath} /></Suspense>
   }
 
   // ── Spreadsheet (XLSX/XLS/CSV) — inline preview via SheetJS ──
   if (isSpreadsheet) {
-    return <XlsxViewer filePath={openFilePath} />
+    return <Suspense fallback={<EditorFallback />}><XlsxViewer filePath={openFilePath} /></Suspense>
   }
 
   // ── PPTX — no inline renderer, offer to open externally ──
@@ -281,21 +319,23 @@ export default function VaultFilePage(): React.JSX.Element | null {
       </div>
 
       {loaded ? (
-        <div className="flex flex-1 overflow-hidden">
-          <div className={isMarkdown && showPreview ? 'w-1/2 border-r' : 'w-full'}>
-            <CodeMirrorEditor
-              value={diskContent}
-              onChange={handleChange}
-              onSave={() => void save()}
-              className="h-full"
-            />
-          </div>
-          {isMarkdown && showPreview && (
-            <div className="w-1/2 overflow-auto p-6">
-              <Markdown>{content}</Markdown>
+        <Suspense fallback={<EditorFallback />}>
+          <div className="flex flex-1 overflow-hidden">
+            <div className={isMarkdown && showPreview ? 'w-1/2 border-r' : 'w-full'}>
+              <CodeMirrorEditor
+                value={diskContent}
+                onChange={handleChange}
+                onSave={() => void save()}
+                className="h-full"
+              />
             </div>
-          )}
-        </div>
+            {isMarkdown && showPreview && (
+              <div className="w-1/2 overflow-auto p-6">
+                <Markdown>{content}</Markdown>
+              </div>
+            )}
+          </div>
+        </Suspense>
       ) : (
         <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
           Loading…

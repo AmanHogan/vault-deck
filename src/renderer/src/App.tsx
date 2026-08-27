@@ -1,21 +1,24 @@
+import { lazy, Suspense } from 'react'
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AppSidebar } from './components/app-sidebar'
 import { Toaster } from './components/ui/sonner'
 import { TooltipProvider } from './components/ui/tooltip'
 import { VaultProvider, useVault } from './lib/vault-context'
 import { EditorThemeProvider } from './lib/editor-theme-context'
-import DashboardPage from './pages/DashboardPage'
-import BusinessCommitmentsPage from './pages/BusinessCommitmentsPage'
-import DevelopmentCommitmentsOnePage from './pages/DevelopmentCommitmentsOnePage'
-import SkillsPage from './pages/SkillsPage'
-import ResumePage from './pages/ResumePage'
-import OneOnOnePage from './pages/OneOnOnePage'
-import ActionItemsPage from './pages/ActionItemsPage'
-import ReviewsPage from './pages/ReviewsPage'
-import VaultPickerPage from './pages/VaultPickerPage'
-import VaultFilePage from './pages/VaultFilePage'
 import { CommandPalette } from './components/command-palette'
 import { FileTab } from './components/file-tab'
+
+// ── Lazy-loaded pages (code-split so only the visible page loads) ───────────
+const DashboardPage = lazy(() => import('./pages/DashboardPage'))
+const BusinessCommitmentsPage = lazy(() => import('./pages/BusinessCommitmentsPage'))
+const DevelopmentCommitmentsOnePage = lazy(() => import('./pages/DevelopmentCommitmentsOnePage'))
+const SkillsPage = lazy(() => import('./pages/SkillsPage'))
+const ResumePage = lazy(() => import('./pages/ResumePage'))
+const OneOnOnePage = lazy(() => import('./pages/OneOnOnePage'))
+const ActionItemsPage = lazy(() => import('./pages/ActionItemsPage'))
+const ReviewsPage = lazy(() => import('./pages/ReviewsPage'))
+const VaultPickerPage = lazy(() => import('./pages/VaultPickerPage'))
+const VaultFilePage = lazy(() => import('./pages/VaultFilePage'))
 
 /**
  * Inner layout that reads vault state and conditionally shows the
@@ -37,7 +40,7 @@ function Layout({ children }: { children: React.ReactNode }): React.JSX.Element 
 
   // No vault configured — show the picker
   if (!vaultPath) {
-    return <VaultPickerPage />
+    return <Suspense fallback={<div className="flex h-screen items-center justify-center text-sm text-muted-foreground">Loading…</div>}><VaultPickerPage /></Suspense>
   }
 
   return (
@@ -47,9 +50,13 @@ function Layout({ children }: { children: React.ReactNode }): React.JSX.Element 
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <FileTab />
         {openFilePath ? (
-          <VaultFilePage />
+          <Suspense fallback={<div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">Loading…</div>}>
+            <VaultFilePage key={openFilePath} />
+          </Suspense>
         ) : (
-          <div className="flex-1 overflow-auto p-6">{children}</div>
+          <Suspense fallback={<div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">Loading…</div>}>
+            <div className="flex-1 overflow-auto p-6">{children}</div>
+          </Suspense>
         )}
       </main>
     </div>

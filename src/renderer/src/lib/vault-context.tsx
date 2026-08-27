@@ -10,6 +10,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useMemo,
   type ReactNode,
 } from 'react'
 import type { VaultEntry } from '@/types/types'
@@ -211,31 +212,41 @@ export function VaultProvider({ children }: { children: ReactNode }): React.JSX.
     return actual
   }, [refreshTree])
 
+  // Memoize the context value so consumers only re-render when the
+  // data they depend on actually changes — not on every parent render.
+  const contextValue = useMemo(
+    () => ({
+      vaultPath,
+      ready,
+      tree,
+      openTabs,
+      openFilePath: activeTab,
+      openFile,
+      closeTab,
+      closeAllTabs,
+      closeFile,
+      deactivateFile,
+      switchTab,
+      openVault,
+      pickAndOpenVault,
+      refreshTree,
+      createFile,
+      createDirectory,
+      copyFile,
+      deleteFile,
+      deleteDirectory,
+      renameFile,
+    }),
+    [
+      vaultPath, ready, tree, openTabs, activeTab,
+      openFile, closeTab, closeAllTabs, closeFile, deactivateFile,
+      switchTab, openVault, pickAndOpenVault, refreshTree,
+      createFile, createDirectory, copyFile, deleteFile, deleteDirectory, renameFile,
+    ],
+  )
+
   return (
-    <VaultContext.Provider
-      value={{
-        vaultPath,
-        ready,
-        tree,
-        openTabs,
-        openFilePath: activeTab,
-        openFile,
-        closeTab,
-        closeAllTabs,
-        closeFile,
-        deactivateFile,
-        switchTab,
-        openVault,
-        pickAndOpenVault,
-        refreshTree,
-        createFile,
-        createDirectory,
-        copyFile,
-        deleteFile,
-        deleteDirectory,
-        renameFile,
-      }}
-    >
+    <VaultContext.Provider value={contextValue}>
       {children}
     </VaultContext.Provider>
   )
