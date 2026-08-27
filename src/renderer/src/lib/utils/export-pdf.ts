@@ -126,14 +126,14 @@ function addDivider(ctx: PdfCtx): void {
   ctx.y += 10
 }
 
-// ─── Business Partner Impact (bcomm1) ────────────────────────────────────────
+// ─── Work Impact (bcomm1) ────────────────────────────────────────
 
 export async function exportBcomm1ToPdf(commitments: BusinessCommitmentOne[]): Promise<void> {
   const { jsPDF } = await import("jspdf")
   const pdf = new jsPDF({ unit: "pt", format: "letter" }) as unknown as JsPDFInstance
   const ctx = newCtx(pdf)
 
-  addTitle(ctx, "Business Partner Impact")
+  addTitle(ctx, "Work Impact")
   addSubtitle(ctx, `Exported ${todayStr()} · ${commitments.length} item${commitments.length !== 1 ? "s" : ""}`)
 
   commitments.forEach((c, i) => {

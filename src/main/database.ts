@@ -179,6 +179,19 @@ db.exec(`
     uploadedAt TEXT DEFAULT (datetime('now'))
   );
 
+  CREATE TABLE IF NOT EXISTS periodic_reviews (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    reviewType TEXT NOT NULL DEFAULT 'midyear',
+    reviewDate TEXT,
+    accomplishments TEXT DEFAULT '',
+    developmentProgress TEXT DEFAULT '',
+    futurePriorities TEXT DEFAULT '',
+    additionalNotes TEXT DEFAULT '',
+    createdAt TEXT DEFAULT (datetime('now')),
+    updatedAt TEXT DEFAULT (datetime('now'))
+  );
+
   CREATE TABLE IF NOT EXISTS note_groups (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -620,6 +633,30 @@ export const skills = {
     return normalize(db.prepare('SELECT * FROM skills WHERE id=?').get(id) as Record<string, unknown>)
   },
   delete: (id: number) => { db.prepare('DELETE FROM skills WHERE id=?').run(id) }
+}
+
+// ─── Quick Accomplishments ────────────────────────────────────────────────────
+
+// ─── Periodic Reviews ────────────────────────────────────────────────────────
+
+export const periodicReviews = {
+  getAll: (): Record<string, unknown>[] =>
+    db.prepare('SELECT * FROM periodic_reviews ORDER BY reviewDate DESC, createdAt DESC').all() as Record<string, unknown>[],
+  create: (p: Record<string, unknown>): Record<string, unknown> => {
+    const r = db.prepare(`
+      INSERT INTO periodic_reviews (title,reviewType,reviewDate,accomplishments,developmentProgress,futurePriorities,additionalNotes)
+      VALUES (?,?,?,?,?,?,?)
+    `).run(p.title, p.reviewType ?? 'midyear', p.reviewDate ?? null, p.accomplishments ?? '', p.developmentProgress ?? '', p.futurePriorities ?? '', p.additionalNotes ?? '')
+    return db.prepare('SELECT * FROM periodic_reviews WHERE id=?').get(r.lastInsertRowid) as Record<string, unknown>
+  },
+  update: (id: number, p: Record<string, unknown>): Record<string, unknown> => {
+    db.prepare(`
+      UPDATE periodic_reviews SET title=?,reviewType=?,reviewDate=?,accomplishments=?,developmentProgress=?,futurePriorities=?,additionalNotes=?,updatedAt=datetime('now')
+      WHERE id=?
+    `).run(p.title, p.reviewType ?? 'midyear', p.reviewDate ?? null, p.accomplishments ?? '', p.developmentProgress ?? '', p.futurePriorities ?? '', p.additionalNotes ?? '', id)
+    return db.prepare('SELECT * FROM periodic_reviews WHERE id=?').get(id) as Record<string, unknown>
+  },
+  delete: (id: number): void => { db.prepare('DELETE FROM periodic_reviews WHERE id=?').run(id) }
 }
 
 // ─── Quick Accomplishments ────────────────────────────────────────────────────

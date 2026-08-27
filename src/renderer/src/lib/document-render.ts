@@ -1,7 +1,6 @@
 import type {
   Progression,
-  MidYearCheckin,
-  EndOfYearReview,
+  PeriodicReview,
   StarEntry,
   DevelopmentEntry,
 } from '@/types/types'
@@ -68,35 +67,28 @@ export function buildProgressionDoc(p: Progression): ViewerDoc {
   return { title: p.title || 'Progression', blocks }
 }
 
-export function buildMidYearDoc(c: MidYearCheckin): ViewerDoc {
+/**
+ * Build a ViewerDoc from a generalized periodic review.
+ * @param r The periodic review record.
+ * @returns A ViewerDoc with the review sections.
+ */
+export function buildPeriodicReviewDoc(r: PeriodicReview): ViewerDoc {
   const sections: { heading: string; value: string }[] = [
-    { heading: 'Business Commitments', value: c.businessAccomplishments },
-    { heading: 'Development Commitments', value: c.developmentProgress },
-    { heading: 'Aligning Going Forward', value: c.goingForwardPriorities },
+    { heading: 'Top Accomplishments', value: r.accomplishments },
+    { heading: 'Development Progress', value: r.developmentProgress },
+    { heading: 'Future Priorities & Alignment', value: r.futurePriorities },
   ]
+  if (has(r.additionalNotes)) {
+    sections.push({ heading: 'Additional Notes', value: r.additionalNotes })
+  }
   const blocks: ViewerBlock[] = []
   for (const s of sections) {
     blocks.push({ type: 'heading', level: 2, text: s.heading })
     if (has(s.value)) blocks.push({ type: 'paragraph', text: s.value })
     else blocks.push({ type: 'empty', text: 'No response yet.' })
   }
-  return { title: c.title || 'Mid-Year Check-in', blocks }
-}
-
-export function buildEndOfYearDoc(r: EndOfYearReview): ViewerDoc {
-  const sections: { heading: string; value: string }[] = [
-    { heading: 'Business Partner Impact', value: r.bcomm1Notes },
-    { heading: 'TDP Program Impact', value: r.bcomm2Notes },
-    { heading: 'Development Commitment', value: r.dcomm1Notes },
-    { heading: 'Innovation Commitment', value: r.dcomm2Notes },
-  ]
-  const blocks: ViewerBlock[] = []
-  for (const s of sections) {
-    blocks.push({ type: 'heading', level: 2, text: s.heading })
-    if (has(s.value)) blocks.push({ type: 'paragraph', text: s.value })
-    else blocks.push({ type: 'empty', text: 'No response yet.' })
-  }
-  return { title: r.title || 'End-of-Year Review', blocks }
+  const typeLabel = r.reviewType === 'midyear' ? 'Midyear Check-In' : 'End-of-Year Review'
+  return { title: r.title || typeLabel, subtitle: typeLabel, blocks }
 }
 
 // ─── Markdown ─────────────────────────────────────────────────────────────────

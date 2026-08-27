@@ -4,7 +4,11 @@
  * derived from the app's CSS variables so it matches dark/light mode.
  */
 
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useCallback } from 'react'
+import {
+  Bold, Italic, Strikethrough, Code, Heading1, Heading2, Heading3,
+  List, ListOrdered, Quote, Minus, Link as LinkIcon, Underline,
+} from 'lucide-react'
 import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection, rectangularSelection, placeholder as cmPlaceholder } from '@codemirror/view'
 import { EditorState, type Extension } from '@codemirror/state'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
@@ -204,6 +208,7 @@ function buildExtensions(onChange: (value: string) => void, onSave: () => void):
       }
     }),
     EditorView.lineWrapping,
+    EditorView.contentAttributes.of({ spellcheck: 'true', autocorrect: 'on' }),
   ]
 }
 

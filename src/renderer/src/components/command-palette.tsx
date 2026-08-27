@@ -14,6 +14,7 @@ import {
   FileText,
   Users,
   CheckSquare,
+  CalendarCheck,
   Layers,
   Network,
   Search,
@@ -35,12 +36,13 @@ interface Command {
 
 const staticCommands: Command[] = [
   { id: 'dashboard', label: 'Dashboard', group: 'Overview', icon: LayoutDashboard, action: 'navigate', href: '/dashboard' },
-  { id: 'bcomm', label: 'Business Partner Impact', group: 'Business', icon: ClipboardList, action: 'navigate', href: '/dashboard/business-commitments' },
+  { id: 'bcomm', label: 'Work Impact', group: 'Business', icon: ClipboardList, action: 'navigate', href: '/dashboard/business-commitments' },
   { id: 'dcomm1', label: 'Development Commitment', group: 'Development', icon: BookOpen, action: 'navigate', href: '/dashboard/development-commitments-one' },
   { id: 'skills', label: 'Skills', group: 'Development', icon: Sparkles, action: 'navigate', href: '/dashboard/skills' },
   { id: 'resume', label: 'Resume', group: 'Development', icon: FileText, action: 'navigate', href: '/dashboard/resume' },
   { id: '1on1', label: 'One on One Documents', group: 'Other', icon: Users, action: 'navigate', href: '/dashboard/one-on-one' },
   { id: 'actions', label: 'Action Items', group: 'Other', icon: CheckSquare, action: 'navigate', href: '/dashboard/action-items' },
+  { id: 'reviews', label: 'Reviews', group: 'Other', icon: CalendarCheck, action: 'navigate', href: '/dashboard/reviews' },
 ]
 
 /** Map file extension to an icon. */

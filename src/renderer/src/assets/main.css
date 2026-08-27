@@ -163,3 +163,11 @@
 .xlsx-preview tr:hover td {
   background: #f0f5ff;
 }
+
+/* ── Custom title bar — frameless window drag regions ── */
+.titlebar-drag {
+  -webkit-app-region: drag;
+}
+.titlebar-nodrag {
+  -webkit-app-region: no-drag;
+}

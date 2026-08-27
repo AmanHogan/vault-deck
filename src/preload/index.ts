@@ -85,6 +85,12 @@ const api = {
     update: (id: number, payload: unknown) => ipcRenderer.invoke('quickAccomplishments:update', id, payload),
     delete: (id: number) => ipcRenderer.invoke('quickAccomplishments:delete', id),
   },
+  periodicReviews: {
+    getAll: () => ipcRenderer.invoke('periodicReviews:getAll'),
+    create: (payload: unknown) => ipcRenderer.invoke('periodicReviews:create', payload),
+    update: (id: number, payload: unknown) => ipcRenderer.invoke('periodicReviews:update', id, payload),
+    delete: (id: number) => ipcRenderer.invoke('periodicReviews:delete', id)
+  },
   data: {
     saveJson: (suggestedName: string, content: string) => ipcRenderer.invoke('data:saveJson', suggestedName, content),
     readJson: () => ipcRenderer.invoke('data:readJson')

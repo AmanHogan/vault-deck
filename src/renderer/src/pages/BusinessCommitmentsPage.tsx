@@ -37,12 +37,12 @@ export default function BusinessCommitmentsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Business Partner Impact</h1>
-        <p className="text-sm text-muted-foreground">Track work items and business value delivered through your BP assignment.</p>
+        <h1 className="text-2xl font-bold tracking-tight">Work Impact</h1>
+        <p className="text-sm text-muted-foreground">Track work items and the value they deliver.</p>
       </div>
       {data && (
         <JsonTransferBar
-          label="Business Partner Impact"
+          label="Work Impact"
           recordCount={data.length}
           dataType="bcomm1"
           onExport={handleExport}

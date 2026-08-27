@@ -16,6 +16,9 @@ import type {
   UpdateActionItemDTO,
   Skill,
   CreateSkillDTO,
+  PeriodicReview,
+  CreatePeriodicReviewDTO,
+  UpdatePeriodicReviewDTO,
 } from '@/types/types'
 
 const { api } = window
@@ -101,3 +104,17 @@ export const updateSkill = (id: number, payload: CreateSkillDTO): Promise<Skill>
 
 export const deleteSkill = (id: number): Promise<void> =>
   api.skills.delete(id)
+
+// ─── Periodic Reviews ────────────────────────────────────────────────────────
+
+export const getAllPeriodicReviews = (): Promise<PeriodicReview[]> =>
+  api.periodicReviews.getAll() as Promise<PeriodicReview[]>
+
+export const createPeriodicReview = (payload: CreatePeriodicReviewDTO): Promise<PeriodicReview> =>
+  api.periodicReviews.create(payload) as Promise<PeriodicReview>
+
+export const updatePeriodicReview = (id: number, payload: UpdatePeriodicReviewDTO): Promise<PeriodicReview> =>
+  api.periodicReviews.update(id, payload) as Promise<PeriodicReview>
+
+export const deletePeriodicReview = (id: number): Promise<void> =>
+  api.periodicReviews.delete(id)

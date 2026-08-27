@@ -6,7 +6,7 @@
  * depending on which rail icon is selected.
  */
 
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -16,13 +16,18 @@ import {
   FileText,
   Users,
   CheckSquare,
+  CalendarCheck,
   FolderOpen,
   Folder,
   Search,
   Settings,
+  FilePlus,
+  Network,
+  Layers,
   type LucideIcon,
 } from 'lucide-react'
 import { VaultFileTree } from '@/components/vault-file-tree'
+import type { VaultEntry } from '@/types/types'
 import { SearchPanel } from '@/components/search-panel'
 import { useVault } from '@/lib/vault-context'
 import { cn } from '@/lib/utils'
@@ -72,7 +77,7 @@ const dashboardNav: NavGroup[] = [
   {
     title: 'Business',
     items: [
-      { label: 'Business Partner Impact', href: '/dashboard/business-commitments', icon: ClipboardList },
+      { label: 'Work Impact', href: '/dashboard/business-commitments', icon: ClipboardList },
     ],
   },
   {
@@ -88,6 +93,7 @@ const dashboardNav: NavGroup[] = [
     items: [
       { label: 'One on One Documents', href: '/dashboard/one-on-one', icon: Users },
       { label: 'Action Items', href: '/dashboard/action-items', icon: CheckSquare },
+      { label: 'Reviews', href: '/dashboard/reviews', icon: CalendarCheck },
     ],
   },
 ]
@@ -167,6 +173,18 @@ function SettingsPanel(): React.JSX.Element {
   )
 }
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Recursively collect all file names in the vault tree. */
+function collectNames(entries: VaultEntry[]): Set<string> {
+  const names = new Set<string>()
+  for (const e of entries) {
+    if (e.type === 'file') names.add(e.name)
+    else if (e.children) for (const n of collectNames(e.children)) names.add(n)
+  }
+  return names
+}
+
 // ─── Main sidebar ────────────────────────────────────────────────────────────
 
 /**
@@ -175,11 +193,114 @@ function SettingsPanel(): React.JSX.Element {
  */
 export function AppSidebar(): React.JSX.Element {
   const [activePanel, setActivePanel] = useState<PanelId>('files')
+  const { tree, createFile, openFile } = useVault()
+
+  // ── Resizable content panel ─────────────────────────────────────
+  const MIN_WIDTH = 160
+  const MAX_WIDTH = 480
+  const DEFAULT_WIDTH = 224 // w-56 equivalent
+  const [panelWidth, setPanelWidth] = useState(DEFAULT_WIDTH)
+  const dragging = useRef(false)
+
+  const onDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    dragging.current = true
+    const startX = e.clientX
+    const startW = panelWidth
+
+    const onMove = (ev: MouseEvent): void => {
+      if (!dragging.current) return
+      const delta = ev.clientX - startX
+      setPanelWidth(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startW + delta)))
+    }
+    const onUp = (): void => {
+      dragging.current = false
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+  }, [panelWidth])
+
+  /** Create a new Untitled note. */
+  async function newNote(): Promise<void> {
+    const existing = collectNames(tree)
+    let n = 1
+    while (existing.has(`Untitled ${n}.md`)) n++
+    const actual = await createFile(`Untitled ${n}.md`)
+    openFile(actual)
+  }
+
+  /** Create a new diagram. */
+  async function newDiagram(): Promise<void> {
+    const existing = collectNames(tree)
+    let n = 1
+    while (existing.has(`Untitled ${n}.diagram`)) n++
+    const name = `Untitled ${n}.diagram`
+    const content = JSON.stringify({ nodes: [], edges: [], viewport: { x: 0, y: 0, zoom: 1 } }, null, 2)
+    const actual = await createFile(name, content)
+    openFile(actual)
+  }
+
+  /** Create a new flashcard deck. */
+  async function newDeck(): Promise<void> {
+    const existing = collectNames(tree)
+    let n = 1
+    while (existing.has(`Untitled ${n}.deck`)) n++
+    const name = `Untitled ${n}.deck`
+    const content = JSON.stringify({ title: `Untitled ${n}`, description: '', tags: [], cards: [] }, null, 2)
+    const actual = await createFile(name, content)
+    openFile(actual)
+  }
 
   return (
     <div className="flex h-full">
       {/* ── Icon rail ───────────────────────────────────────────────── */}
-      <div className="flex w-12 flex-col items-center gap-1 border-r border-sidebar-border bg-sidebar pt-2">
+      <div className="flex w-12 flex-col items-center gap-1 border-r border-sidebar-border bg-sidebar pt-9">
+        {/* Quick-create buttons — always visible at top of rail */}
+        <div className="flex flex-col items-center gap-1 border-b border-sidebar-border pb-2 mb-1">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => void newNote()}
+                className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+              >
+                <FilePlus className="h-[16px] w-[16px]" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={6}>New note</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => void newDiagram()}
+                className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+              >
+                <Network className="h-[16px] w-[16px]" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={6}>New diagram</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => void newDeck()}
+                className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+              >
+                <Layers className="h-[16px] w-[16px]" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={6}>New flashcard deck</TooltipContent>
+          </Tooltip>
+        </div>
+
         {railIcons.map(({ id, label, icon: Icon }) => {
           const active = activePanel === id
           return (
@@ -206,14 +327,22 @@ export function AppSidebar(): React.JSX.Element {
         })}
       </div>
 
-      {/* ── Content panel ───────────────────────────────────────────── */}
-      <div className="flex w-56 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar">
+      {/* ── Content panel (resizable) ──────────────────────────────── */}
+      <div className="relative flex flex-col overflow-hidden bg-sidebar" style={{ width: panelWidth }}>
         <div className="flex-1 overflow-auto">
           {activePanel === 'files' && <FilesPanel />}
           {activePanel === 'search' && <SearchPanel />}
           {activePanel === 'dashboard' && <NavPanel groups={dashboardNav} />}
           {activePanel === 'settings' && <SettingsPanel />}
         </div>
+
+        {/* Drag handle on the right edge */}
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          onMouseDown={onDragStart}
+          className="absolute inset-y-0 right-0 z-10 w-1 cursor-col-resize border-r border-sidebar-border transition-colors hover:bg-primary/30 active:bg-primary/50"
+        />
       </div>
     </div>
   )

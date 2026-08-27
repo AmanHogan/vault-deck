@@ -67,7 +67,7 @@ function inRange(dateStr: string | undefined, from: Date | null, to: Date | null
 
 // Which field label to show in the modal header
 const IMPORT_SOURCE_LABELS: Record<ImportField, string> = {
-  businessPartnerWork: 'Business Partner Impact',
+  businessPartnerWork: 'Work Impact',
   tdpContributions:    'TDP Program Impact',
   trainingSkills:      'Development Commitment',
   innovationEvents:    'Innovation Commitment',
@@ -133,10 +133,6 @@ export default function OneOnOnePage({ initialDocs }: Props) {
 
   function handleField(field: keyof CreateOneOnOneDTO, val: string | boolean | number | undefined) {
     setForm((prev) => ({ ...prev, [field]: val }))
-  }
-
-  function handleNumberField(field: keyof CreateOneOnOneDTO, val: string) {
-    handleField(field, val === "" ? undefined : parseFloat(val))
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -422,151 +418,37 @@ export default function OneOnOnePage({ initialDocs }: Props) {
                   onChange={(e) => handleField("documentDate", e.target.value)}
                 />
               </div>
-              {/* Work section */}
+
+              {/* Work */}
               <fieldset className="space-y-2 rounded border p-3">
                 <legend className="px-1 text-sm font-semibold">Work</legend>
                 <div>
                   <div className="flex items-center justify-between">
-                    <Label className="text-xs">Business partner work</Label>
-                    {importBtn("businessPartnerWork", "Business Commitments 1")}
+                    <Label className="text-xs">Work updates</Label>
+                    {importBtn("businessPartnerWork", "Work Impact")}
                   </div>
-
                   <Textarea
                     value={form.businessPartnerWork ?? ""}
                     onChange={(e) => handleField("businessPartnerWork", e.target.value)}
                     rows={3}
                   />
                 </div>
-
-                <div>
-                  <Label className="text-xs">Workload concerns</Label>
-                  <Textarea
-                    value={form.workloadConcerns ?? ""}
-                    onChange={(e) => handleField("workloadConcerns", e.target.value)}
-                    rows={2}
-                  />
-                </div>
-
                 <div>
                   <div className="flex items-center justify-between">
-                    <Label className="text-xs">TDP contributions</Label>
-                    {importBtn("tdpContributions", "Business Commitments 2")}
-                  </div>
-
-                  <Textarea
-                    value={form.tdpContributions ?? ""}
-                    onChange={(e) => handleField("tdpContributions", e.target.value)}
-                    rows={2}
-                  />
-                </div>
-
-                <div>
-                  <Label className="text-xs">Utilization %</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={form.utilizationPercentage ?? ""}
-                    onChange={(e) => handleNumberField("utilizationPercentage", e.target.value)}
-                  />
-                </div>
-              </fieldset>
-              {/* Training & Development */}
-              <fieldset className="space-y-2 rounded border p-3">
-                <legend className="px-1 text-sm font-semibold">Training &amp; Development</legend>
-
-                <div>
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs">Training skills</Label>
+                    <Label className="text-xs">Development / Training</Label>
                     {importBtn("trainingSkills", "Development Commitments 1")}
                   </div>
-
                   <Textarea
                     value={form.trainingSkills ?? ""}
                     onChange={(e) => handleField("trainingSkills", e.target.value)}
                     rows={3}
                   />
                 </div>
-
-                <div>
-                  <Label className="text-xs">Pursuing degrees</Label>
-                  <Input
-                    value={form.pursuingDegrees ?? ""}
-                    onChange={(e) => handleField("pursuingDegrees", e.target.value)}
-                  />
-                </div>
-
-                <div>
-                  <Label className="text-xs">Growth Hub progress</Label>
-                  <Input
-                    value={form.growthHubProgress ?? ""}
-                    onChange={(e) => handleField("growthHubProgress", e.target.value)}
-                  />
-                </div>
-
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={normalizeBoolean(form.successPathwaysUpdated)}
-                    onChange={(e) => handleField("successPathwaysUpdated", e.target.checked)}
-                  />
-                  Success pathways updated
-                </label>
               </fieldset>
-              {/* Compliance */}
-              <fieldset className="space-y-2 rounded border p-3">
-                <legend className="px-1 text-sm font-semibold">Compliance</legend>
-                <div className="flex gap-2">
-                  <div className="flex-1">
-                    <Label className="text-xs">Compliance %</Label>
-                    <Input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={form.compliancePercentage ?? ""}
-                      onChange={(e) => handleNumberField("compliancePercentage", e.target.value)}
-                    />
-                  </div>
 
-                  <div className="flex-1">
-                    <Label className="text-xs">EHS Training %</Label>
-                    <Input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={form.ehsTrainingPercentage ?? ""}
-                      onChange={(e) => handleNumberField("ehsTrainingPercentage", e.target.value)}
-                    />
-                  </div>
-
-                  <div className="flex-1">
-                    <Label className="text-xs">Contingency Training %</Label>
-                    <Input
-                      type="number"
-                      min={0}
-                      max={100}
-                      value={form.contingencyTrainingPercentage ?? ""}
-                      onChange={(e) => handleNumberField("contingencyTrainingPercentage", e.target.value)}
-                    />
-                  </div>
-                </div>
-              </fieldset>
               {/* Discussion */}
               <fieldset className="space-y-2 rounded border p-3">
                 <legend className="px-1 text-sm font-semibold">Discussion</legend>
-                <div>
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs">Innovation events</Label>
-                    {importBtn("innovationEvents", "Development Commitments 2")}
-                  </div>
-
-                  <Textarea
-                    value={form.innovationEvents ?? ""}
-                    onChange={(e) => handleField("innovationEvents", e.target.value)}
-                    rows={3}
-                  />
-                </div>
-
                 {DISCUSSION_FIELDS.map(([field, label]) => (
                   <div key={field}>
                     <Label className="text-xs">{label}</Label>
@@ -577,13 +459,11 @@ export default function OneOnOnePage({ initialDocs }: Props) {
                     />
                   </div>
                 ))}
-
                 <div>
                   <div className="flex items-center justify-between">
-                    <Label className="text-xs">Additional items</Label>
+                    <Label className="text-xs">Additional notes</Label>
                     {importBtn("additionalItems", "Skills")}
                   </div>
-
                   <Textarea
                     value={form.additionalItems ?? ""}
                     onChange={(e) => handleField("additionalItems", e.target.value)}

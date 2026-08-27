@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronUp, Info } from 'lucide-react'
-import { Link } from 'react-router-dom'
 
 type DocCompProps = {
   cardTitle?: string
@@ -8,7 +7,6 @@ type DocCompProps = {
   goals?: string
   validationCriteria?: string[]
   tips?: string[]
-  docsHref?: string
 }
 
 export default function DocComp({
@@ -17,7 +15,6 @@ export default function DocComp({
   goals,
   validationCriteria = [],
   tips = [],
-  docsHref = '/docs/tdp',
 }: DocCompProps) {
   const [open, setOpen] = useState(false)
 
@@ -37,13 +34,6 @@ export default function DocComp({
           )}
         </div>
         <div className="flex items-center gap-3 shrink-0">
-          <Link
-            to={docsHref}
-            onClick={(e) => e.stopPropagation()}
-            className="text-xs text-primary underline-offset-2 hover:underline"
-          >
-            TDP Docs
-          </Link>
           {open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
         </div>
       </button>

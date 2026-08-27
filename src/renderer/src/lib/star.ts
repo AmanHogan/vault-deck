@@ -12,7 +12,7 @@ function joinParts(parts: Array<string | null | undefined>, sep = '\n\n'): strin
     .join(sep)
 }
 
-/** Pre-fill a STAR draft from a Business Partner Impact commitment. */
+/** Pre-fill a STAR draft from a Work Impact commitment. */
 export function businessToStar(c: BusinessCommitmentOne): StarEntry {
   const result = joinParts([
     c.impact ?? null,

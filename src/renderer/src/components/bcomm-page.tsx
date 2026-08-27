@@ -1,6 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { Dialog } from 'radix-ui'
-import { Trash2, Pencil, Plus, X, Upload, Download } from 'lucide-react'
+import { Trash2, Pencil, Plus, X } from 'lucide-react'
 import type { BusinessCommitmentOne, BusinessCommitmentOneFormState, ValueEntry } from '@/types/types'
 import { emptyBusinessCommitmentForm, StatusMap } from '@/types/types'
 import { createCommitmentOne, updateBusinessCommitmentOne, deleteCommitmentOne } from '@/lib/actions'
@@ -142,16 +142,16 @@ export default function BcommPage({ initialCommitments }: Props) {
   return (
     <div className="flex flex-col gap-6">
       <DocComp
-        cardTitle="Business Partner Impact"
-        cardDescription="Deliver measurable business impact through your Business Partner assignment."
-        goals="Share at least three accomplishments and clearly describe how each one added business value (e.g., improved outcomes, increased efficiency, reduced risk/cost, or enhanced customer/employee experience)."
+        cardTitle="Work Impact"
+        cardDescription="Deliver measurable impact through your work assignments."
+        goals="Share accomplishments and clearly describe how each one added value (e.g., improved outcomes, increased efficiency, reduced risk/cost, or enhanced experience)."
         validationCriteria={[
-          'Recorded at least three distinct accomplishments during Business Partner assignment.',
+          'Recorded at least three distinct accomplishments.',
           'For each accomplishment: what you did, the problem/opportunity, who benefited, why it mattered, measurable impact, and value category.',
         ]}
         tips={[
-          'Ask your Business Partners what key deliverables they expect this year.',
-          'Think how your work ties to ATS transformational initiatives and 2026 priorities.',
+          'Ask stakeholders what key deliverables they expect.',
+          'Think how your work ties to broader organizational priorities.',
         ]}
       />
 
@@ -175,29 +175,6 @@ export default function BcommPage({ initialCommitments }: Props) {
           </SelectContent>
         </Select>
         <div className="ml-auto flex gap-2">
-          <Button variant="outline" size="sm" onClick={async () => {
-            const result = await window.api.data.readJson()
-            if (!result) return
-            try {
-              const parsed = JSON.parse(result)
-              const records = (parsed.records ?? parsed) as BusinessCommitmentOne[]
-              for (const r of records) {
-                const created = await window.api.bcomm1.create(r) as BusinessCommitmentOne
-                setCommitments((p) => [created, ...p])
-              }
-            } catch { /* bad file */ }
-          }}>
-            <Upload className="h-4 w-4" />Import JSON
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => {
-            const envelope = { type: 'bcomm1', version: 1, exportedAt: new Date().toISOString(), records: sorted.map(({ id: _id, createdAt: _ca, ...rest }) => rest) }
-            const blob = new Blob([JSON.stringify(envelope, null, 2)], { type: 'application/json' })
-            const url = URL.createObjectURL(blob)
-            const a = document.createElement('a'); a.href = url; a.download = 'business-partner-impact.json'
-            document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url)
-          }}>
-            <Download className="h-4 w-4" />Export JSON
-          </Button>
           <Button variant="outline" size="sm" onClick={() => void exportBcomm1ToPdf(commitments)}>Export PDF</Button>
           <ExportRangeButton
             items={commitments}
@@ -368,7 +345,7 @@ export default function BcommPage({ initialCommitments }: Props) {
                   {(form.valueEntryList ?? []).map((ve, i) => (
                     <div key={i} className="flex items-center gap-2 rounded bg-muted/40 px-3 py-1.5 text-sm">
                       <span className="font-medium">{ve.label}:</span>
-                      <span className="min-w-0 flex-1 truncate text-muted-foreground">{ve.value}</span>
+                      <span className="min-w-0 flex-1 whitespace-pre-wrap break-words text-muted-foreground">{ve.value}</span>
                       <Button type="button" variant="ghost" size="icon-xs" onClick={() => removeValueEntry(i)}>
                         <Trash2 className="h-3 w-3" />
                       </Button>

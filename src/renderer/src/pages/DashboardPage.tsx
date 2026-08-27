@@ -1,18 +1,18 @@
 import { Link } from 'react-router-dom'
 import {
   ClipboardList, BookOpen,
-  Users, CheckSquare, Sparkles, FileText,
+  Users, CheckSquare, Sparkles, FileText, CalendarCheck,
 } from 'lucide-react'
 
 const sections = [
   {
     group: 'Business',
     title: 'Track your business impact.',
-    description: 'Document the work you do with business partners.',
+    description: 'Track work items and their impact.',
     items: [
       {
-        label: 'Business Partner Impact',
-        description: 'Track and document business partner work items and their impact.',
+        label: 'Work Impact',
+        description: 'Track work items, accomplishments, and the value they deliver.',
         href: '/dashboard/business-commitments',
         icon: ClipboardList,
         iconBg: 'bg-blue-500/10 text-blue-400',
@@ -66,6 +66,13 @@ const sections = [
         icon: CheckSquare,
         iconBg: 'bg-rose-500/10 text-rose-400',
       },
+      {
+        label: 'Reviews',
+        description: 'Midyear check-ins and end-of-year reviews with accomplishments and priorities.',
+        href: '/dashboard/reviews',
+        icon: CalendarCheck,
+        iconBg: 'bg-amber-500/10 text-amber-400',
+      },
     ],
   },
 ]
@@ -80,7 +87,13 @@ export default function DashboardPage(): React.JSX.Element {
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
 
   return (
-    <div className="mx-auto max-w-4xl space-y-14">
+    <div className="relative mx-auto max-w-4xl space-y-14">
+      {/* Top-right radial glow — same treatment as c4-diagram / Flowdeck */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed -top-32 right-[-10%] -z-10 h-[480px] w-[480px] rounded-full bg-primary/[0.08] blur-[120px]"
+      />
+
       {/* Hero greeting */}
       <div className="space-y-2 pt-4">
         <h1 className="bg-gradient-to-b from-foreground to-muted-foreground bg-clip-text text-3xl font-extrabold tracking-tight text-transparent sm:text-4xl">

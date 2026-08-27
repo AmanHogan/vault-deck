@@ -432,40 +432,36 @@ export type SaveProgressionInput = {
   developmentEntries: DevelopmentEntry[]
 }
 
-// ─── Reviews ─────────────────────────────────────────────────────────────────
+// ─── Periodic Reviews ────────────────────────────────────────────────────────
 
-export type ReviewType = 'midyear' | 'endofyear'
-export type ReviewCategory = 'bcomm1' | 'bcomm2' | 'dcomm1' | 'dcomm2'
+export const REVIEW_TYPES = ['midyear', 'endofyear'] as const
+export type PeriodicReviewType = (typeof REVIEW_TYPES)[number]
 
-export type Review = {
+export type PeriodicReview = {
   id?: number
-  type: ReviewType
-  category: ReviewCategory
-  selfAssessment: string
-  rating: number
+  title: string
+  reviewType: PeriodicReviewType
+  reviewDate?: string
+  accomplishments: string
+  developmentProgress: string
+  futurePriorities: string
+  additionalNotes: string
+  createdAt?: string
   updatedAt?: string
 }
 
-export type MidYearCheckin = {
-  id: number
-  title: string
-  businessAccomplishments: string
-  developmentProgress: string
-  goingForwardPriorities: string
-  createdAt: string
-  updatedAt: string
-}
+export type CreatePeriodicReviewDTO = Omit<PeriodicReview, 'id' | 'createdAt' | 'updatedAt'>
+export type UpdatePeriodicReviewDTO = Partial<CreatePeriodicReviewDTO>
 
-export type EndOfYearReview = {
-  id: number
-  title: string
-  bcomm1Notes: string
-  bcomm2Notes: string
-  dcomm1Notes: string
-  dcomm2Notes: string
-  createdAt: string
-  updatedAt: string
-}
+export const emptyPeriodicReviewForm = (): CreatePeriodicReviewDTO => ({
+  title: '',
+  reviewType: 'midyear',
+  reviewDate: '',
+  accomplishments: '',
+  developmentProgress: '',
+  futurePriorities: '',
+  additionalNotes: '',
+})
 
 export type QuickAccomplishmentCategory = 'bcomm1' | 'bcomm2' | 'dcomm1' | 'dcomm2'
 export const QA_STATUSES = ['Not Started', 'In Progress', 'Completed', 'Exceeded Expectations'] as const

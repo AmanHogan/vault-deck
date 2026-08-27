@@ -1,10 +1,10 @@
-import { app, shell, BrowserWindow, ipcMain, protocol, net, dialog } from 'electron'
+import { app, shell, BrowserWindow, ipcMain, protocol, net, dialog, Menu, MenuItem } from 'electron'
 import { join, extname, basename } from 'path'
 import { pathToFileURL } from 'url'
 import fs from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { bcomm1, dcomm1, oneOnOne, actionItems, skills, fcSets, fcCards, fcSkills, imageFiles, resumeFiles, noteGroups, notes, quickAccomplishments } from './database'
+import { bcomm1, dcomm1, oneOnOne, actionItems, skills, fcSets, fcCards, fcSkills, imageFiles, resumeFiles, noteGroups, notes, quickAccomplishments, periodicReviews } from './database'
 import { vault } from './vault'
 
 // Register before app.whenReady
@@ -96,13 +96,24 @@ function createWindow(): void {
     show: false,
     autoHideMenuBar: true,
     title: 'Workspace',
+    titleBarStyle: 'hidden',
+    titleBarOverlay: process.platform === 'win32' ? {
+      color: '#0a0a0a',
+      symbolColor: '#a1a1aa',
+      height: 36,
+    } : undefined,
+    trafficLightPosition: process.platform === 'darwin' ? { x: 12, y: 10 } : undefined,
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
-      webviewTag: true
+      webviewTag: true,
+      spellcheck: true
     }
   })
+
+  // Enable spell checker with the system locale (falls back to en-US)
+  mainWindow.webContents.session.setSpellCheckerLanguages(['en-US'])
 
   mainWindowRef = mainWindow
 
@@ -112,6 +123,26 @@ function createWindow(): void {
 
   mainWindow.on('closed', () => {
     mainWindowRef = null
+  })
+
+  // Spell-check context menu: show suggestions + "Add to Dictionary"
+  mainWindow.webContents.on('context-menu', (_event, params) => {
+    if (!params.misspelledWord) return
+    const menu = new Menu()
+    for (const suggestion of params.dictionarySuggestions.slice(0, 5)) {
+      menu.append(new MenuItem({
+        label: suggestion,
+        click: () => mainWindow.webContents.replaceMisspelling(suggestion),
+      }))
+    }
+    if (params.dictionarySuggestions.length > 0) {
+      menu.append(new MenuItem({ type: 'separator' }))
+    }
+    menu.append(new MenuItem({
+      label: 'Add to Dictionary',
+      click: () => mainWindow.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord),
+    }))
+    menu.popup()
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -223,6 +254,12 @@ app.whenReady().then(() => {
   ipcMain.handle('quickAccomplishments:create', (_, payload) => quickAccomplishments.create(payload))
   ipcMain.handle('quickAccomplishments:update', (_, id, payload) => quickAccomplishments.update(id, payload))
   ipcMain.handle('quickAccomplishments:delete', (_, id) => quickAccomplishments.delete(id))
+
+  // ─── Periodic Reviews ───────────────────────────────────────────────────────
+  ipcMain.handle('periodicReviews:getAll', () => periodicReviews.getAll())
+  ipcMain.handle('periodicReviews:create', (_, payload) => periodicReviews.create(payload))
+  ipcMain.handle('periodicReviews:update', (_, id, payload) => periodicReviews.update(id, payload))
+  ipcMain.handle('periodicReviews:delete', (_, id) => periodicReviews.delete(id))
 
   // ─── Flash Card Sets ──────────────────────────────────────────────────────────
   ipcMain.handle('fcSets:getAll', () => fcSets.getAll())

@@ -10,6 +10,7 @@ import SkillsPage from './pages/SkillsPage'
 import ResumePage from './pages/ResumePage'
 import OneOnOnePage from './pages/OneOnOnePage'
 import ActionItemsPage from './pages/ActionItemsPage'
+import ReviewsPage from './pages/ReviewsPage'
 import VaultPickerPage from './pages/VaultPickerPage'
 import VaultFilePage from './pages/VaultFilePage'
 import { CommandPalette } from './components/command-palette'
@@ -74,6 +75,7 @@ export default function App(): React.JSX.Element {
             <Route path="/dashboard/resume" element={<ResumePage />} />
             <Route path="/dashboard/one-on-one" element={<OneOnOnePage />} />
             <Route path="/dashboard/action-items" element={<ActionItemsPage />} />
+            <Route path="/dashboard/reviews" element={<ReviewsPage />} />
           </Routes>
         </Layout>
       </HashRouter>
