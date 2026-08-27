@@ -99,7 +99,20 @@ function readDirTree(dirPath: string, vaultRoot: string): VaultEntry[] {
     const fullPath = join(dirPath, entry.name)
     const relPath = relative(vaultRoot, fullPath).split(sep).join('/')
 
-    if (entry.isDirectory()) {
+    // On Windows + OneDrive, cloud-only placeholders are reparse points
+    // that return false for both isFile() and isDirectory(). Fall back to
+    // fs.statSync to resolve the real type.
+    let isDir = entry.isDirectory()
+    let isFile = entry.isFile()
+    if (!isDir && !isFile) {
+      try {
+        const stat = fs.statSync(fullPath)
+        isDir = stat.isDirectory()
+        isFile = stat.isFile()
+      } catch { /* skip unreadable entries */ continue }
+    }
+
+    if (isDir) {
       const children = readDirTree(fullPath, vaultRoot)
       // Include directory even if empty (user may want to add files)
       result.push({
@@ -109,7 +122,7 @@ function readDirTree(dirPath: string, vaultRoot: string): VaultEntry[] {
         extension: '',
         children,
       })
-    } else if (entry.isFile()) {
+    } else if (isFile) {
       const ext = extname(entry.name).toLowerCase()
       // Show all files — the tree is a real file explorer
       result.push({
