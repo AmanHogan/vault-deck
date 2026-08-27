@@ -67,12 +67,10 @@ export default function VaultFilePage(): React.JSX.Element | null {
       setContent('')
       setDiskContent('')
       setLoaded(false)
-      setAbsolutePath(null)
       return
     }
     setLoaded(false)
     setDirty(false)
-    setAbsolutePath(null)
     void (async () => {
       try {
         // Only read text content for editable files (not binary previews)
