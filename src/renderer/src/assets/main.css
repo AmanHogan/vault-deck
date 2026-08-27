@@ -1,3 +1,6 @@
+/* Design tokens aligned with homelab-ui-kit / c4-diagram design system.
+ * Dark-first, blue brand accent (#3b82f6). */
+
 @import "tailwindcss";
 @import "tw-animate-css";
 @plugin "@tailwindcss/typography";
@@ -7,6 +10,7 @@
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, monospace;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -33,13 +37,15 @@
   --color-card: var(--card);
   --color-foreground: var(--foreground);
   --color-background: var(--background);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
+  /* Subtract/add off the base radius, not multiply — keeps the top of the
+     scale from blowing up into an oversized pill. */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: 1rem;
+  --radius-3xl: 1.5rem;
+  --radius-4xl: 2rem;
 }
 
 :root {
@@ -49,18 +55,18 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
   --muted: oklch(0.97 0 0);
   --muted-foreground: oklch(0.556 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
+  --destructive: #ef4444;
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --ring: #2563eb;
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
@@ -73,33 +79,34 @@
 }
 
 .dark {
-  /* Claude Code-style dark: charcoal grays, not pure black */
-  --background: oklch(0.13 0.004 264);      /* ~#1a1b1e deep charcoal */
-  --foreground: oklch(0.92 0 0);            /* near-white text */
-  --card: oklch(0.17 0.004 264);            /* ~#22242a panel surface */
-  --card-foreground: oklch(0.92 0 0);
-  --popover: oklch(0.19 0.004 264);         /* slightly lighter for dropdowns */
-  --popover-foreground: oklch(0.92 0 0);
-  --primary: oklch(0.88 0 0);              /* light gray for buttons/links */
-  --primary-foreground: oklch(0.15 0 0);
-  --secondary: oklch(0.22 0.004 264);
-  --secondary-foreground: oklch(0.88 0 0);
-  --muted: oklch(0.22 0.004 264);
-  --muted-foreground: oklch(0.58 0 0);      /* subdued labels */
-  --accent: oklch(0.24 0.006 264);          /* hover/active fill */
-  --accent-foreground: oklch(0.92 0 0);
-  --destructive: oklch(0.65 0.18 22);
-  --border: oklch(1 0 0 / 8%);             /* very subtle borders */
-  --input: oklch(1 0 0 / 10%);
-  --ring: oklch(0.55 0 0);
-  --sidebar: oklch(0.155 0.004 264);        /* sidebar slightly darker than cards */
-  --sidebar-foreground: oklch(0.88 0 0);
-  --sidebar-primary: oklch(0.88 0 0);
-  --sidebar-primary-foreground: oklch(0.15 0 0);
-  --sidebar-accent: oklch(0.24 0.006 264);  /* active item fill */
-  --sidebar-accent-foreground: oklch(0.96 0 0);
-  --sidebar-border: oklch(1 0 0 / 7%);
-  --sidebar-ring: oklch(0.55 0 0);
+  /* Near-black/near-white neutral scale with blue brand accent (#3b82f6).
+     Matches homelab-ui-kit / c4-diagram (Flowdeck) design system. */
+  --background: #0a0a0a;
+  --foreground: #fafafa;
+  --card: #171717;
+  --card-foreground: #fafafa;
+  --popover: #262626;
+  --popover-foreground: #fafafa;
+  --primary: #3b82f6;
+  --primary-foreground: #ffffff;
+  --secondary: #262626;
+  --secondary-foreground: #fafafa;
+  --muted: #262626;
+  --muted-foreground: #a1a1a1;
+  --accent: #404040;
+  --accent-foreground: #fafafa;
+  --destructive: #ff6467;
+  --border: rgba(255, 255, 255, 0.11);
+  --input: rgba(255, 255, 255, 0.14);
+  --ring: #3b82f6;
+  --sidebar: #171717;
+  --sidebar-foreground: #e8e8e8;
+  --sidebar-primary: #3b82f6;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: rgba(59, 130, 246, 0.1);
+  --sidebar-accent-foreground: #60a5fa;
+  --sidebar-border: rgba(255, 255, 255, 0.09);
+  --sidebar-ring: #3b82f6;
 }
 
 @layer base {
@@ -112,4 +119,47 @@
   html {
     @apply font-sans;
   }
+}
+
+/* ── Gradient headline text ───────────────────────────────────────────────
+   Clip a blue gradient to the glyphs. Usage:
+   <span class="gradient-text">accent phrase</span>
+   For the more common muted-fade heading (not brand-blue), apply inline:
+   className="bg-gradient-to-b from-foreground to-muted-foreground
+   bg-clip-text text-transparent" */
+.gradient-text {
+  background: linear-gradient(100deg, #7c9bff 0%, #3b82f6 60%, #60a5fa 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* ── Accent glow — primary-colored box-shadow for CTAs / hero elements ── */
+.glow-primary {
+  box-shadow: 0 4px 14px 0 rgb(59 130 246 / 0.25);
+}
+.glow-primary-lg {
+  box-shadow: 0 6px 20px 0 rgb(59 130 246 / 0.35);
+}
+
+/* ── XLSX spreadsheet preview ── */
+.xlsx-preview table {
+  border-collapse: collapse;
+  font-size: 13px;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  color: #1a1a1a;
+}
+.xlsx-preview th,
+.xlsx-preview td {
+  border: 1px solid #d4d4d8;
+  padding: 4px 8px;
+  text-align: left;
+  white-space: nowrap;
+}
+.xlsx-preview th {
+  background: #f4f4f5;
+  font-weight: 600;
+}
+.xlsx-preview tr:hover td {
+  background: #f0f5ff;
 }

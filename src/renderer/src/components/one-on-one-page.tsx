@@ -5,16 +5,20 @@ import type {
   CreateOneOnOneDTO,
   BusinessCommitmentOne,
   DevelopmentCommitmentOne,
-  DevelopmentCommitmentTwo,
-  BusinessCommitmentTwo,
   Skill,
 } from "@/types/types"
 import { createOneOnOne, updateOneOnOne, deleteOneOnOne } from "@/lib/actions"
 import { getAllCommitmentsOne } from "@/lib/actions"
 import { getAllDevelopmentCommitmentsOne, getModulesForItem } from "@/lib/actions"
-import { getAllDevelopmentCommitmentsTwo } from "@/lib/actions"
-import { getAllBusinessCommitmentsTwo } from "@/lib/actions"
 import { getAllSkills } from "@/lib/actions"
+
+// Stubs for removed features (TDP Program Impact, Innovation Commitments)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type DevelopmentCommitmentTwo = any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type BusinessCommitmentTwo = any
+const getAllDevelopmentCommitmentsTwo = (): Promise<DevelopmentCommitmentTwo[]> => Promise.resolve([])
+const getAllBusinessCommitmentsTwo = (): Promise<BusinessCommitmentTwo[]> => Promise.resolve([])
 import { exportToMarkdown, exportToPdf, exportToDocx } from "@/lib/utils/one-on-one-export"
 import { Input } from "./ui/input"
 import { Textarea } from "./ui/textarea"

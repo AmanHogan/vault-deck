@@ -18,26 +18,6 @@ const api = {
     updateModule: (moduleId: number, payload: unknown) => ipcRenderer.invoke('dcomm1:updateModule', moduleId, payload),
     deleteModule: (moduleId: number) => ipcRenderer.invoke('dcomm1:deleteModule', moduleId)
   },
-  dcomm2: {
-    getAll: () => ipcRenderer.invoke('dcomm2:getAll'),
-    create: (payload: unknown) => ipcRenderer.invoke('dcomm2:create', payload),
-    update: (id: number, payload: unknown) => ipcRenderer.invoke('dcomm2:update', id, payload),
-    delete: (id: number) => ipcRenderer.invoke('dcomm2:delete', id),
-    getSubEvents: (eventId: number) => ipcRenderer.invoke('dcomm2:getSubEvents', eventId),
-    createSubEvent: (eventId: number, payload: unknown) => ipcRenderer.invoke('dcomm2:createSubEvent', eventId, payload),
-    updateSubEvent: (subItemId: number, payload: unknown) => ipcRenderer.invoke('dcomm2:updateSubEvent', subItemId, payload),
-    deleteSubEvent: (subItemId: number) => ipcRenderer.invoke('dcomm2:deleteSubEvent', subItemId)
-  },
-  bcomm2: {
-    getAll: () => ipcRenderer.invoke('bcomm2:getAll'),
-    create: (payload: unknown) => ipcRenderer.invoke('bcomm2:create', payload),
-    update: (id: number, payload: unknown) => ipcRenderer.invoke('bcomm2:update', id, payload),
-    delete: (id: number) => ipcRenderer.invoke('bcomm2:delete', id),
-    getSubEvents: (eventId: number) => ipcRenderer.invoke('bcomm2:getSubEvents', eventId),
-    createSubEvent: (eventId: number, payload: unknown) => ipcRenderer.invoke('bcomm2:createSubEvent', eventId, payload),
-    updateSubEvent: (subEventId: number, payload: unknown) => ipcRenderer.invoke('bcomm2:updateSubEvent', subEventId, payload),
-    deleteSubEvent: (subEventId: number) => ipcRenderer.invoke('bcomm2:deleteSubEvent', subEventId)
-  },
   oneOnOne: {
     getAll: () => ipcRenderer.invoke('oneOnOne:getAll'),
     create: (payload: unknown) => ipcRenderer.invoke('oneOnOne:create', payload),
@@ -99,29 +79,6 @@ const api = {
     updateLabel: (id: number, label: string) => ipcRenderer.invoke('resumeFiles:updateLabel', id, label),
     delete: (id: number) => ipcRenderer.invoke('resumeFiles:delete', id)
   },
-  progressions: {
-    getAll: () => ipcRenderer.invoke('progressions:getAll'),
-    create: (payload: unknown) => ipcRenderer.invoke('progressions:create', payload),
-    update: (id: number, payload: unknown) => ipcRenderer.invoke('progressions:update', id, payload),
-    delete: (id: number) => ipcRenderer.invoke('progressions:delete', id),
-  },
-  reviews: {
-    getAll: () => ipcRenderer.invoke('reviews:getAll'),
-    upsert: (type: string, category: string, selfAssessment: string, rating: number) =>
-      ipcRenderer.invoke('reviews:upsert', type, category, selfAssessment, rating),
-  },
-  midyear: {
-    getAll: () => ipcRenderer.invoke('midyear:getAll'),
-    create: (payload: unknown) => ipcRenderer.invoke('midyear:create', payload),
-    update: (id: number, payload: unknown) => ipcRenderer.invoke('midyear:update', id, payload),
-    delete: (id: number) => ipcRenderer.invoke('midyear:delete', id),
-  },
-  endofyear: {
-    getAll: () => ipcRenderer.invoke('endofyear:getAll'),
-    create: (payload: unknown) => ipcRenderer.invoke('endofyear:create', payload),
-    update: (id: number, payload: unknown) => ipcRenderer.invoke('endofyear:update', id, payload),
-    delete: (id: number) => ipcRenderer.invoke('endofyear:delete', id),
-  },
   quickAccomplishments: {
     getAll: () => ipcRenderer.invoke('quickAccomplishments:getAll'),
     create: (payload: unknown) => ipcRenderer.invoke('quickAccomplishments:create', payload),
@@ -133,13 +90,12 @@ const api = {
     readJson: () => ipcRenderer.invoke('data:readJson')
   },
   notifications: {
-    // Called by renderer once its listeners are mounted; returns upcoming items for the briefing
     rendererReady: () => ipcRenderer.invoke('notifications:rendererReady'),
     checkNow: () => ipcRenderer.invoke('notifications:checkNow'),
-    onReminder: (callback: (data: unknown) => void) => {
-      const handler = (_: Electron.IpcRendererEvent, data: unknown) => callback(data)
+    onReminder: (callback: (data: unknown) => void): (() => void) => {
+      const handler = (_: Electron.IpcRendererEvent, data: unknown): void => callback(data)
       ipcRenderer.on('reminder:show', handler)
-      return () => ipcRenderer.off('reminder:show', handler)
+      return (): void => { ipcRenderer.off('reminder:show', handler) }
     },
     snooze: (id: number, minutes: number) => ipcRenderer.invoke('reminder:snooze', id, minutes),
     dismiss: (id: number) => ipcRenderer.invoke('reminder:dismiss', id),
@@ -158,6 +114,35 @@ const api = {
     exportNote: (title: string, content: string) => ipcRenderer.invoke('notes:exportNote', title, content),
     exportGroup: (groupName: string, noteList: { title: string; content: string }[]) => ipcRenderer.invoke('notes:exportGroup', groupName, noteList),
     importFiles: (groupId: number) => ipcRenderer.invoke('notes:importFiles', groupId)
+  },
+  vault: {
+    getPath: () => ipcRenderer.invoke('vault:getPath') as Promise<string | null>,
+    pick: () => ipcRenderer.invoke('vault:pick') as Promise<string | null>,
+    open: (vaultPath: string) => ipcRenderer.invoke('vault:open', vaultPath) as Promise<void>,
+    getTree: () => ipcRenderer.invoke('vault:getTree'),
+    getAbsolutePath: (relPath: string) => ipcRenderer.invoke('vault:getAbsolutePath', relPath) as Promise<string>,
+    readFile: (relPath: string) => ipcRenderer.invoke('vault:readFile', relPath) as Promise<string>,
+    readFileBinary: (relPath: string) => ipcRenderer.invoke('vault:readFileBinary', relPath) as Promise<ArrayBuffer>,
+    writeFile: (relPath: string, content: string) => ipcRenderer.invoke('vault:writeFile', relPath, content) as Promise<void>,
+    createFile: (relPath: string, content?: string) => ipcRenderer.invoke('vault:createFile', relPath, content) as Promise<string>,
+    deleteFile: (relPath: string) => ipcRenderer.invoke('vault:deleteFile', relPath) as Promise<void>,
+    renameFile: (oldPath: string, newPath: string) => ipcRenderer.invoke('vault:renameFile', oldPath, newPath) as Promise<string>,
+    createDirectory: (relPath: string) => ipcRenderer.invoke('vault:createDirectory', relPath) as Promise<void>,
+    deleteDirectory: (relPath: string) => ipcRenderer.invoke('vault:deleteDirectory', relPath) as Promise<void>,
+    search: (query: string, limit?: number) => ipcRenderer.invoke('vault:search', query, limit) as Promise<{ path: string; name: string; type: string; snippet: string }[]>,
+    getTags: () => ipcRenderer.invoke('vault:getTags') as Promise<{ tag: string; files: string[]; count: number }[]>,
+    showInExplorer: (relPath: string) => ipcRenderer.invoke('vault:showInExplorer', relPath) as Promise<void>,
+    openInDefaultApp: (relPath: string) => ipcRenderer.invoke('vault:openInDefaultApp', relPath) as Promise<string>,
+    onTreeChanged: (callback: (tree: unknown[]) => void): (() => void) => {
+      const handler = (_: Electron.IpcRendererEvent, tree: unknown[]): void => callback(tree)
+      ipcRenderer.on('vault:tree-changed', handler)
+      return (): void => { ipcRenderer.off('vault:tree-changed', handler) }
+    },
+    onFileChanged: (callback: (relPath: string) => void): (() => void) => {
+      const handler = (_: Electron.IpcRendererEvent, relPath: string): void => callback(relPath)
+      ipcRenderer.on('vault:file-changed', handler)
+      return (): void => { ipcRenderer.off('vault:file-changed', handler) }
+    },
   }
 }
 
@@ -169,8 +154,8 @@ if (process.contextIsolated) {
     console.error(error)
   }
 } else {
-  // @ts-ignore
+  // @ts-ignore -- electron-toolkit fallback for non-isolated contexts
   window.electron = electronAPI
-  // @ts-ignore
+  // @ts-ignore -- electron-toolkit fallback for non-isolated contexts
   window.api = api
 }

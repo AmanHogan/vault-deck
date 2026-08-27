@@ -4,20 +4,21 @@ import { pathToFileURL } from 'url'
 import fs from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { bcomm1, bcomm2, dcomm1, dcomm2, oneOnOne, actionItems, skills, fcSets, fcCards, fcSkills, imageFiles, resumeFiles, noteGroups, notes, progressions, reviews, midyear, endofyear, quickAccomplishments } from './database'
+import { bcomm1, dcomm1, oneOnOne, actionItems, skills, fcSets, fcCards, fcSkills, imageFiles, resumeFiles, noteGroups, notes, quickAccomplishments } from './database'
+import { vault } from './vault'
 
 // Register before app.whenReady
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'local', privileges: { secure: true, standard: true, supportFetchAPI: true, corsEnabled: true } }
+  { scheme: 'local', privileges: { secure: true, standard: true, supportFetchAPI: true, corsEnabled: true } },
+  { scheme: 'vault-file', privileges: { secure: true, standard: true, supportFetchAPI: true, corsEnabled: true, stream: true } }
 ])
 
 // ─── Reminder state ───────────────────────────────────────────────────────────
-// Tracks which timed intervals have already fired this session (resets on restart)
-const notifiedIntervals = new Map<number, Set<string>>() // itemId → Set of interval keys
+const notifiedIntervals = new Map<number, Set<string>>()
 
 let mainWindowRef: BrowserWindow | null = null
 
-function sendReminderToRenderer(item: Record<string, unknown>, intervalKey: string, minutesBefore: number | null) {
+function sendReminderToRenderer(item: Record<string, unknown>, intervalKey: string, minutesBefore: number | null): void {
   if (!mainWindowRef || mainWindowRef.isDestroyed()) return
   mainWindowRef.webContents.send('reminder:show', {
     id: item.id,
@@ -30,7 +31,7 @@ function sendReminderToRenderer(item: Record<string, unknown>, intervalKey: stri
   })
 }
 
-function checkTimedReminders() {
+function checkTimedReminders(): void {
   const now = new Date()
   const today = now.toISOString().slice(0, 10)
   let items: Array<Record<string, unknown>>
@@ -44,14 +45,12 @@ function checkTimedReminders() {
     const dueTime = item.dueTime as string | null | undefined
     const snoozedUntil = item.reminderSnoozedUntil as string | null | undefined
 
-    // Skip if snoozed
     if (snoozedUntil && new Date(snoozedUntil) > now) continue
 
     if (!notifiedIntervals.has(id)) notifiedIntervals.set(id, new Set())
     const fired = notifiedIntervals.get(id)!
 
     if (!dueTime) {
-      // No specific time — fire once when the day arrives
       const key = `date:${dueDate}`
       if (!fired.has(key) && dueDate === today) {
         fired.add(key)
@@ -60,20 +59,16 @@ function checkTimedReminders() {
       continue
     }
 
-    // Has dueTime — compute how many minutes until due
     const [h, m] = dueTime.split(':').map(Number)
     const dueDateTime = new Date(dueDate)
     dueDateTime.setHours(h, m, 0, 0)
     const minutesUntil = (dueDateTime.getTime() - now.getTime()) / 60000
 
-    // Only act when within the 30-minute window (or overdue)
     if (minutesUntil > 32.5) continue
 
     const nothingFiredYet = fired.size === 0
 
     if (nothingFiredYet) {
-      // First time we've seen this item inside the 30-min zone — fire immediately
-      // regardless of which sub-window it lands in
       const mins = Math.max(0, Math.round(minutesUntil))
       const key = minutesUntil < -2.5 ? 'overdue' : minutesUntil < 2.5 ? 'due' : minutesUntil < 7.5 ? 'pre5' : minutesUntil < 12.5 ? 'pre10' : 'pre30'
       fired.add(key)
@@ -88,7 +83,6 @@ function checkTimedReminders() {
       fired.add('due')
       sendReminderToRenderer(item, 'due', 0)
     } else if (!fired.has('overdue') && minutesUntil < -2.5) {
-      // Fires if a snooze pushed the user past the due time without seeing 'due'
       fired.add('overdue')
       sendReminderToRenderer(item, 'overdue', null)
     }
@@ -101,7 +95,7 @@ function createWindow(): void {
     height: 800,
     show: false,
     autoHideMenuBar: true,
-    title: 'Commitment Tracker',
+    title: 'Workspace',
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -133,7 +127,7 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
-  electronApp.setAppUserModelId('com.commitments')
+  electronApp.setAppUserModelId('com.workspace')
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
@@ -152,6 +146,23 @@ app.whenReady().then(() => {
     return net.fetch(pathToFileURL(join(uploadsDir, filename)).toString())
   })
 
+  // ─── Vault-file protocol — serves files from the vault directory ────────────
+  // Used by the renderer to embed PDFs and images in iframes/img tags,
+  // since file:// URLs are blocked by Chromium in cross-origin contexts.
+  protocol.handle('vault-file', (request) => {
+    const url = new URL(request.url)
+    const relPath = decodeURIComponent(url.pathname.slice(1))
+    if (relPath.includes('..')) {
+      return new Response('Forbidden', { status: 403 })
+    }
+    try {
+      const absPath = vault.getAbsolutePath(relPath)
+      return net.fetch(pathToFileURL(absPath).toString())
+    } catch {
+      return new Response('Not found', { status: 404 })
+    }
+  })
+
   // ─── File operations ──────────────────────────────────────────────────────────
   ipcMain.handle('files:save', async (_, sourcePath: string) => {
     const ext = extname(sourcePath).toLowerCase()
@@ -161,7 +172,7 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('files:delete', async (_, filename: string) => {
-    try { await fs.promises.unlink(join(uploadsDir, filename)) } catch {}
+    try { await fs.promises.unlink(join(uploadsDir, filename)) } catch { /* file may already be gone */ }
   })
 
   ipcMain.handle('files:openDialog', async (_, filters: Electron.FileFilter[]) => {
@@ -189,26 +200,6 @@ app.whenReady().then(() => {
   ipcMain.handle('dcomm1:updateModule', (_, moduleId, payload) => dcomm1.updateModule(moduleId, payload))
   ipcMain.handle('dcomm1:deleteModule', (_, moduleId) => dcomm1.deleteModule(moduleId))
 
-  // ─── Development Commitments Two ─────────────────────────────────────────────
-  ipcMain.handle('dcomm2:getAll', () => dcomm2.getAll())
-  ipcMain.handle('dcomm2:create', (_, payload) => dcomm2.create(payload))
-  ipcMain.handle('dcomm2:update', (_, id, payload) => dcomm2.update(id, payload))
-  ipcMain.handle('dcomm2:delete', (_, id) => dcomm2.delete(id))
-  ipcMain.handle('dcomm2:getSubEvents', (_, eventId) => dcomm2.getSubEvents(eventId))
-  ipcMain.handle('dcomm2:createSubEvent', (_, eventId, payload) => dcomm2.createSubEvent(eventId, payload))
-  ipcMain.handle('dcomm2:updateSubEvent', (_, subItemId, payload) => dcomm2.updateSubEvent(subItemId, payload))
-  ipcMain.handle('dcomm2:deleteSubEvent', (_, subItemId) => dcomm2.deleteSubEvent(subItemId))
-
-  // ─── Business Commitments Two ─────────────────────────────────────────────────
-  ipcMain.handle('bcomm2:getAll', () => bcomm2.getAll())
-  ipcMain.handle('bcomm2:create', (_, payload) => bcomm2.create(payload))
-  ipcMain.handle('bcomm2:update', (_, id, payload) => bcomm2.update(id, payload))
-  ipcMain.handle('bcomm2:delete', (_, id) => bcomm2.delete(id))
-  ipcMain.handle('bcomm2:getSubEvents', (_, eventId) => bcomm2.getSubEvents(eventId))
-  ipcMain.handle('bcomm2:createSubEvent', (_, eventId, payload) => bcomm2.createSubEvent(eventId, payload))
-  ipcMain.handle('bcomm2:updateSubEvent', (_, subEventId, payload) => bcomm2.updateSubEvent(subEventId, payload))
-  ipcMain.handle('bcomm2:deleteSubEvent', (_, subEventId) => bcomm2.deleteSubEvent(subEventId))
-
   // ─── One on One ───────────────────────────────────────────────────────────────
   ipcMain.handle('oneOnOne:getAll', () => oneOnOne.getAll())
   ipcMain.handle('oneOnOne:create', (_, payload) => oneOnOne.create(payload))
@@ -221,35 +212,17 @@ app.whenReady().then(() => {
   ipcMain.handle('actionItems:update', (_, id, payload) => actionItems.update(id, payload))
   ipcMain.handle('actionItems:delete', (_, id) => actionItems.delete(id))
 
-  // ─── Progressions ─────────────────────────────────────────────────────────────
-  ipcMain.handle('progressions:getAll', () => progressions.getAll())
-  ipcMain.handle('progressions:create', (_, payload) => progressions.create(payload))
-  ipcMain.handle('progressions:update', (_, id, payload) => progressions.update(id, payload))
-  ipcMain.handle('progressions:delete', (_, id) => progressions.delete(id))
-
-  ipcMain.handle('reviews:getAll', () => reviews.getAll())
-  ipcMain.handle('reviews:upsert', (_, type, category, selfAssessment, rating) => reviews.upsert(type, category, selfAssessment, rating))
-
-  ipcMain.handle('midyear:getAll', () => midyear.getAll())
-  ipcMain.handle('midyear:create', (_, payload) => midyear.create(payload))
-  ipcMain.handle('midyear:update', (_, id, payload) => midyear.update(id, payload))
-  ipcMain.handle('midyear:delete', (_, id) => midyear.delete(id))
-
-  ipcMain.handle('endofyear:getAll', () => endofyear.getAll())
-  ipcMain.handle('endofyear:create', (_, payload) => endofyear.create(payload))
-  ipcMain.handle('endofyear:update', (_, id, payload) => endofyear.update(id, payload))
-  ipcMain.handle('endofyear:delete', (_, id) => endofyear.delete(id))
-
-  ipcMain.handle('quickAccomplishments:getAll', () => quickAccomplishments.getAll())
-  ipcMain.handle('quickAccomplishments:create', (_, payload) => quickAccomplishments.create(payload))
-  ipcMain.handle('quickAccomplishments:update', (_, id, payload) => quickAccomplishments.update(id, payload))
-  ipcMain.handle('quickAccomplishments:delete', (_, id) => quickAccomplishments.delete(id))
-
   // ─── Skills ───────────────────────────────────────────────────────────────────
   ipcMain.handle('skills:getAll', () => skills.getAll())
   ipcMain.handle('skills:create', (_, payload) => skills.create(payload))
   ipcMain.handle('skills:update', (_, id, payload) => skills.update(id, payload))
   ipcMain.handle('skills:delete', (_, id) => skills.delete(id))
+
+  // ─── Quick Accomplishments ────────────────────────────────────────────────────
+  ipcMain.handle('quickAccomplishments:getAll', () => quickAccomplishments.getAll())
+  ipcMain.handle('quickAccomplishments:create', (_, payload) => quickAccomplishments.create(payload))
+  ipcMain.handle('quickAccomplishments:update', (_, id, payload) => quickAccomplishments.update(id, payload))
+  ipcMain.handle('quickAccomplishments:delete', (_, id) => quickAccomplishments.delete(id))
 
   // ─── Flash Card Sets ──────────────────────────────────────────────────────────
   ipcMain.handle('fcSets:getAll', () => fcSets.getAll())
@@ -287,26 +260,6 @@ app.whenReady().then(() => {
   ipcMain.handle('resumeFiles:create', (_, filename, label) => resumeFiles.create(filename, label))
   ipcMain.handle('resumeFiles:updateLabel', (_, id, label) => resumeFiles.updateLabel(id, label))
   ipcMain.handle('resumeFiles:delete', (_, id) => resumeFiles.delete(id))
-
-  // ─── JSON data transfer ───────────────────────────────────────────────────────
-  ipcMain.handle('data:saveJson', async (_, suggestedName: string, content: string) => {
-    const result = await dialog.showSaveDialog({
-      defaultPath: suggestedName,
-      filters: [{ name: 'JSON', extensions: ['json'] }]
-    })
-    if (result.canceled || !result.filePath) return false
-    await fs.promises.writeFile(result.filePath, content, 'utf-8')
-    return true
-  })
-
-  ipcMain.handle('data:readJson', async () => {
-    const result = await dialog.showOpenDialog({
-      properties: ['openFile'],
-      filters: [{ name: 'JSON', extensions: ['json'] }]
-    })
-    if (result.canceled || !result.filePaths[0]) return null
-    return fs.promises.readFile(result.filePaths[0], 'utf-8')
-  })
 
   // ─── Note Groups ──────────────────────────────────────────────────────────────
   ipcMain.handle('noteGroups:getAll', () => noteGroups.getAll())
@@ -355,33 +308,75 @@ app.whenReady().then(() => {
     return created
   })
 
+  // ─── Vault ─────────────────────────────────────────────────────────────────────
+  vault.initFromStored()
+
+  ipcMain.handle('vault:getPath', () => vault.getVaultPath())
+  ipcMain.handle('vault:pick', () => vault.pickVaultFolder())
+  ipcMain.handle('vault:open', (_, vaultPath: string) => { vault.openVault(vaultPath) })
+  ipcMain.handle('vault:getTree', () => vault.getTree())
+  ipcMain.handle('vault:getAbsolutePath', (_, relPath: string) => vault.getAbsolutePath(relPath))
+  ipcMain.handle('vault:readFile', (_, relPath: string) => vault.readFile(relPath))
+  ipcMain.handle('vault:readFileBinary', async (_, relPath: string) => {
+    const buf = await vault.readFileBinary(relPath)
+    return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
+  })
+  ipcMain.handle('vault:writeFile', (_, relPath: string, content: string) => vault.writeFile(relPath, content))
+  ipcMain.handle('vault:createFile', (_, relPath: string, content?: string) => vault.createFile(relPath, content))
+  ipcMain.handle('vault:deleteFile', (_, relPath: string) => vault.deleteFile(relPath))
+  ipcMain.handle('vault:renameFile', (_, oldPath: string, newPath: string) => vault.renameFile(oldPath, newPath))
+  ipcMain.handle('vault:createDirectory', (_, relPath: string) => vault.createDirectory(relPath))
+  ipcMain.handle('vault:deleteDirectory', (_, relPath: string) => vault.deleteDirectory(relPath))
+  ipcMain.handle('vault:search', (_, query: string, limit?: number) => vault.search(query, limit))
+  ipcMain.handle('vault:getTags', () => vault.getTags())
+  ipcMain.handle('vault:showInExplorer', (_, relPath: string) => {
+    const absPath = vault.getAbsolutePath(relPath)
+    shell.showItemInFolder(absPath)
+  })
+  ipcMain.handle('vault:openInDefaultApp', (_, relPath: string) => {
+    const absPath = vault.getAbsolutePath(relPath)
+    return shell.openPath(absPath)
+  })
+
+  // ─── JSON data transfer ───────────────────────────────────────────────────────
+  ipcMain.handle('data:saveJson', async (_, suggestedName: string, content: string) => {
+    const result = await dialog.showSaveDialog({
+      defaultPath: suggestedName,
+      filters: [{ name: 'JSON', extensions: ['json'] }]
+    })
+    if (result.canceled || !result.filePath) return false
+    await fs.promises.writeFile(result.filePath, content, 'utf-8')
+    return true
+  })
+
+  ipcMain.handle('data:readJson', async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile'],
+      filters: [{ name: 'JSON', extensions: ['json'] }]
+    })
+    if (result.canceled || !result.filePaths[0]) return null
+    return fs.promises.readFile(result.filePaths[0], 'utf-8')
+  })
+
   // ─── Action Item Reminders ────────────────────────────────────────────────────
-  // Renderer calls this once its listeners are mounted — safer than a fixed timer
-  // because on Windows Electron can start significantly slower than on Mac
   ipcMain.handle('notifications:rendererReady', () => {
-    // Briefing: return all upcoming items directly so renderer can display them
     try {
       return actionItems.getUpcoming()
     } catch { return [] }
   })
 
-  // Timed reminders — poll every 1 minute; renderer being ready starts the first check
   setInterval(checkTimedReminders, 60 * 1000)
 
-  // Allow renderer to trigger a manual check (e.g. when user opens the page)
   ipcMain.handle('notifications:checkNow', () => {
     checkTimedReminders()
   })
 
-  // Snooze: re-fires after the snooze window passes (notifiedIntervals reset for that item)
   ipcMain.handle('reminder:snooze', (_evt, id: number, minutes: number) => {
     const until = new Date(Date.now() + minutes * 60 * 1000).toISOString()
     actionItems.snooze(id, until)
-    // Clear interval tracking for this item so it can re-fire after snooze expires
     notifiedIntervals.delete(id)
   })
 
-  // Dismiss: silences all reminders for this item until tomorrow
   ipcMain.handle('reminder:dismiss', (_evt, id: number) => {
     actionItems.dismissReminder(id)
     notifiedIntervals.delete(id)
@@ -398,4 +393,8 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
   }
+})
+
+app.on('will-quit', () => {
+  vault.dispose()
 })

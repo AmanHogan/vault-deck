@@ -1,0 +1,541 @@
+/**
+ * Recursive file tree component for the vault sidebar. Shows folders
+ * (collapsible) and files with extension-based icons. Clicking a file
+ * opens it via the vault context.
+ *
+ * Features:
+ * - Icon toolbar at the top (new file, new diagram, new deck, new folder)
+ * - Right-click context menus on files and folders
+ * - Inline rename
+ * - Drag-and-drop to move files/folders into other folders
+ */
+
+import { useState, useCallback } from 'react'
+import {
+  ChevronRight,
+  ChevronDown,
+  File,
+  FileText,
+  FilePlus,
+  Network,
+  Layers,
+  Image,
+  FileSpreadsheet,
+  FolderClosed,
+  FolderOpen,
+  FolderPlus,
+  Trash2,
+  Check,
+  X,
+  Pencil,
+  FileType,
+  Presentation,
+  ExternalLink,
+} from 'lucide-react'
+import { ContextMenu as ContextMenuPrimitive } from 'radix-ui'
+import type { VaultEntry } from '@/types/types'
+import { useVault } from '@/lib/vault-context'
+import { cn } from '@/lib/utils'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+/** Return initial content for a new file based on extension. */
+function initialContent(name: string): string | undefined {
+  if (name.endsWith('.deck')) {
+    const title = name.replace(/\.deck$/, '')
+    return JSON.stringify({ title, description: '', tags: [], cards: [] }, null, 2)
+  }
+  if (name.endsWith('.diagram')) {
+    return JSON.stringify({ nodes: [], edges: [], viewport: { x: 0, y: 0, zoom: 1 } }, null, 2)
+  }
+  return undefined
+}
+
+/** Extract just the filename from a path. */
+function fileName(path: string): string {
+  return path.split('/').pop() ?? path
+}
+
+/** Extract the parent directory from a path (empty string for root-level). */
+function parentDir(path: string): string {
+  const parts = path.split('/')
+  return parts.length > 1 ? parts.slice(0, -1).join('/') : ''
+}
+
+// ─── Inline name input ──────────────────────────────────────────────────────
+
+/**
+ * Inline text input for naming new files/folders or renaming.
+ * @param props placeholder, defaultValue, onCommit, onCancel.
+ * @returns The rendered inline input.
+ */
+function InlineNameInput({
+  placeholder,
+  defaultValue = '',
+  onCommit,
+  onCancel,
+}: {
+  placeholder: string
+  defaultValue?: string
+  onCommit: (name: string) => void
+  onCancel: () => void
+}): React.JSX.Element {
+  const [value, setValue] = useState(defaultValue)
+
+  const commit = (): void => {
+    const trimmed = value.trim()
+    if (trimmed && trimmed !== defaultValue) {
+      onCommit(trimmed)
+    } else {
+      onCancel()
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-1 px-3 py-1">
+      <input
+        autoFocus
+        type="text"
+        className="h-6 min-w-0 flex-1 rounded border border-input bg-transparent px-1.5 text-xs outline-none placeholder:text-muted-foreground focus:border-primary"
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') commit()
+          if (e.key === 'Escape') onCancel()
+        }}
+        onBlur={commit}
+      />
+      <button
+        type="button"
+        className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+        onMouseDown={(e) => { e.preventDefault(); commit() }}
+      >
+        <Check className="h-3 w-3" />
+      </button>
+      <button
+        type="button"
+        className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:text-destructive"
+        onMouseDown={(e) => { e.preventDefault(); onCancel() }}
+      >
+        <X className="h-3 w-3" />
+      </button>
+    </div>
+  )
+}
+
+// ─── File extension icon ────────────────────────────────────────────────────
+
+/**
+ * Render the appropriate icon for a file extension.
+ * @param props The extension (including dot) and optional className.
+ * @returns The rendered icon element.
+ */
+function FileExtIcon({ ext, className }: { ext: string; className?: string }): React.JSX.Element {
+  switch (ext) {
+    case '.md':
+    case '.txt':
+      return <FileText className={className} />
+    case '.diagram':
+      return <Network className={className} />
+    case '.deck':
+      return <Layers className={className} />
+    case '.png':
+    case '.jpg':
+    case '.jpeg':
+    case '.gif':
+    case '.svg':
+    case '.webp':
+      return <Image className={className} />
+    case '.csv':
+    case '.xlsx':
+      return <FileSpreadsheet className={className} />
+    case '.pdf':
+      return <FileType className={className} />
+    case '.pptx':
+      return <Presentation className={className} />
+    case '.docx':
+      return <FileText className={className} />
+    default:
+      return <File className={className} />
+  }
+}
+
+// ─── Context menu styled items ──────────────────────────────────────────────
+
+const ctxItemClass =
+  'flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none data-highlighted:bg-accent data-highlighted:text-accent-foreground'
+const ctxSepClass = 'my-1 h-px bg-border'
+
+// ─── File tree node ─────────────────────────────────────────────────────────
+
+interface FileTreeNodeProps {
+  entry: VaultEntry
+  depth: number
+}
+
+/**
+ * A single node (file or folder) in the file tree, rendered recursively.
+ * Supports right-click context menus and drag-and-drop to move files
+ * into folders.
+ * @param props The entry and indentation depth.
+ * @returns The rendered tree node.
+ */
+function FileTreeNode({ entry, depth }: FileTreeNodeProps): React.JSX.Element {
+  const { openFilePath, openFile, createFile, createDirectory, deleteFile, deleteDirectory, renameFile } = useVault()
+  const [expanded, setExpanded] = useState(depth < 1)
+  const [creatingFile, setCreatingFile] = useState<'file' | 'diagram' | 'deck' | null>(null)
+  const [creatingFolder, setCreatingFolder] = useState(false)
+  const [renaming, setRenaming] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
+
+  const isActive = entry.type === 'file' && openFilePath === entry.path
+
+  // ── Drag source handlers ──
+
+  const handleDragStart = useCallback((e: React.DragEvent) => {
+    e.dataTransfer.setData('text/plain', entry.path)
+    e.dataTransfer.effectAllowed = 'move'
+  }, [entry.path])
+
+  // ── Drop target handlers (folders only) ──
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setDragOver(true)
+  }, [])
+
+  const handleDragLeave = useCallback(() => {
+    setDragOver(false)
+  }, [])
+
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragOver(false)
+    const sourcePath = e.dataTransfer.getData('text/plain')
+    if (!sourcePath || sourcePath === entry.path) return
+
+    // Don't drop into self or a child of self
+    if (entry.path.startsWith(sourcePath + '/')) return
+
+    const name = fileName(sourcePath)
+    const newPath = `${entry.path}/${name}`
+
+    // Don't drop if already in this folder
+    if (parentDir(sourcePath) === entry.path) return
+
+    try {
+      await renameFile(sourcePath, newPath)
+      setExpanded(true)
+    } catch {
+      /* move failed — name collision, etc. */
+    }
+  }, [entry.path, renameFile])
+
+  // ── Drop on root (move to vault root) ──
+
+  if (entry.type === 'directory') {
+    const FolderIcon = expanded ? FolderOpen : FolderClosed
+    const ChevronIcon = expanded ? ChevronDown : ChevronRight
+
+    return (
+      <div>
+        <ContextMenuPrimitive.Root>
+          <ContextMenuPrimitive.Trigger asChild>
+            <div
+              draggable
+              onDragStart={handleDragStart}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => void handleDrop(e)}
+              className={cn(
+                'group flex cursor-pointer items-center gap-1 rounded-md px-1 py-1 text-sm hover:bg-sidebar-accent',
+                dragOver && 'bg-primary/15 ring-1 ring-primary',
+              )}
+              style={{ paddingLeft: `${depth * 12 + 4}px` }}
+            >
+              {renaming ? (
+                <InlineNameInput
+                  placeholder={entry.name}
+                  defaultValue={entry.name}
+                  onCommit={async (newName) => {
+                    setRenaming(false)
+                    const parent = parentDir(entry.path)
+                    try {
+                      const newPath = parent ? `${parent}/${newName}` : newName
+                      await window.api.vault.renameFile(entry.path, newPath)
+                    } catch { /* rename failed */ }
+                  }}
+                  onCancel={() => setRenaming(false)}
+                />
+              ) : (
+                <button
+                  type="button"
+                  className="flex flex-1 items-center gap-1.5 truncate text-left"
+                  onClick={() => setExpanded(!expanded)}
+                >
+                  <ChevronIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  <FolderIcon className="h-4 w-4 shrink-0 text-amber-500" />
+                  <span className="truncate">{entry.name}</span>
+                </button>
+              )}
+            </div>
+          </ContextMenuPrimitive.Trigger>
+
+          <ContextMenuPrimitive.Portal>
+            <ContextMenuPrimitive.Content className="z-50 min-w-48 rounded-md border bg-popover p-1 text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95">
+              <ContextMenuPrimitive.Item className={ctxItemClass} onClick={() => { setCreatingFile('file'); setExpanded(true) }}>
+                <FileText className="h-4 w-4" /> New file
+              </ContextMenuPrimitive.Item>
+              <ContextMenuPrimitive.Item className={ctxItemClass} onClick={() => { setCreatingFile('diagram'); setExpanded(true) }}>
+                <Network className="h-4 w-4" /> New diagram
+              </ContextMenuPrimitive.Item>
+              <ContextMenuPrimitive.Item className={ctxItemClass} onClick={() => { setCreatingFile('deck'); setExpanded(true) }}>
+                <Layers className="h-4 w-4" /> New deck
+              </ContextMenuPrimitive.Item>
+              <ContextMenuPrimitive.Item className={ctxItemClass} onClick={() => { setCreatingFolder(true); setExpanded(true) }}>
+                <FolderClosed className="h-4 w-4" /> New folder
+              </ContextMenuPrimitive.Item>
+              <ContextMenuPrimitive.Separator className={ctxSepClass} />
+              <ContextMenuPrimitive.Item className={ctxItemClass} onClick={() => setRenaming(true)}>
+                <Pencil className="h-4 w-4" /> Rename
+              </ContextMenuPrimitive.Item>
+              <ContextMenuPrimitive.Separator className={ctxSepClass} />
+              <ContextMenuPrimitive.Item className={ctxItemClass} onClick={() => void window.api.vault.showInExplorer(entry.path)}>
+                <FolderOpen className="h-4 w-4" /> Reveal in Finder
+              </ContextMenuPrimitive.Item>
+              <ContextMenuPrimitive.Separator className={ctxSepClass} />
+              <ContextMenuPrimitive.Item className={`${ctxItemClass} text-destructive data-highlighted:text-destructive`} onClick={() => void deleteDirectory(entry.path)}>
+                <Trash2 className="h-4 w-4" /> Delete folder
+              </ContextMenuPrimitive.Item>
+            </ContextMenuPrimitive.Content>
+          </ContextMenuPrimitive.Portal>
+        </ContextMenuPrimitive.Root>
+
+        {creatingFile && (
+          <div style={{ paddingLeft: `${(depth + 1) * 12 + 4}px` }}>
+            <InlineNameInput
+              placeholder={creatingFile === 'diagram' ? 'diagram.diagram' : creatingFile === 'deck' ? 'flashcards.deck' : 'note.md'}
+              onCommit={async (name) => {
+                const kind = creatingFile
+                setCreatingFile(null)
+                let finalName = name
+                if (kind === 'diagram' && !name.endsWith('.diagram')) finalName = name + '.diagram'
+                if (kind === 'deck' && !name.endsWith('.deck')) finalName = name + '.deck'
+                const path = `${entry.path}/${finalName}`
+                const actual = await createFile(path, initialContent(finalName))
+                openFile(actual)
+              }}
+              onCancel={() => setCreatingFile(null)}
+            />
+          </div>
+        )}
+
+        {creatingFolder && (
+          <div style={{ paddingLeft: `${(depth + 1) * 12 + 4}px` }}>
+            <InlineNameInput
+              placeholder="folder name"
+              onCommit={async (name) => {
+                setCreatingFolder(false)
+                await createDirectory(`${entry.path}/${name}`)
+              }}
+              onCancel={() => setCreatingFolder(false)}
+            />
+          </div>
+        )}
+
+        {expanded && entry.children?.map((child) => (
+          <FileTreeNode key={child.path} entry={child} depth={depth + 1} />
+        ))}
+      </div>
+    )
+  }
+
+  // ── File node ──
+  return (
+    <ContextMenuPrimitive.Root>
+      <ContextMenuPrimitive.Trigger asChild>
+        <div
+          draggable
+          onDragStart={handleDragStart}
+          className={cn(
+            'group flex cursor-pointer items-center gap-1.5 rounded-md px-1 py-1 text-sm hover:bg-sidebar-accent',
+            isActive && 'bg-primary/10 text-primary',
+          )}
+          style={{ paddingLeft: `${depth * 12 + 20}px` }}
+        >
+          {renaming ? (
+            <InlineNameInput
+              placeholder={entry.name}
+              defaultValue={entry.name}
+              onCommit={async (newName) => {
+                setRenaming(false)
+                const parent = parentDir(entry.path)
+                try {
+                  const newPath = parent ? `${parent}/${newName}` : newName
+                  const actual = await renameFile(entry.path, newPath)
+                  openFile(actual)
+                } catch { /* rename failed */ }
+              }}
+              onCancel={() => setRenaming(false)}
+            />
+          ) : (
+            <button
+              type="button"
+              className="flex flex-1 items-center gap-1.5 truncate text-left"
+              onClick={() => openFile(entry.path)}
+            >
+              <FileExtIcon ext={entry.extension} className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <span className="truncate">{entry.name}</span>
+            </button>
+          )}
+        </div>
+      </ContextMenuPrimitive.Trigger>
+
+      <ContextMenuPrimitive.Portal>
+        <ContextMenuPrimitive.Content className="z-50 min-w-44 rounded-md border bg-popover p-1 text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95">
+          <ContextMenuPrimitive.Item className={ctxItemClass} onClick={() => openFile(entry.path)}>
+            <FileText className="h-4 w-4" /> Open
+          </ContextMenuPrimitive.Item>
+          <ContextMenuPrimitive.Separator className={ctxSepClass} />
+          <ContextMenuPrimitive.Item className={ctxItemClass} onClick={() => setRenaming(true)}>
+            <Pencil className="h-4 w-4" /> Rename
+          </ContextMenuPrimitive.Item>
+          <ContextMenuPrimitive.Separator className={ctxSepClass} />
+          <ContextMenuPrimitive.Item className={ctxItemClass} onClick={() => void window.api.vault.showInExplorer(entry.path)}>
+            <FolderOpen className="h-4 w-4" /> Reveal in Finder
+          </ContextMenuPrimitive.Item>
+          <ContextMenuPrimitive.Item className={ctxItemClass} onClick={() => void window.api.vault.openInDefaultApp(entry.path)}>
+            <ExternalLink className="h-4 w-4" /> Open in default app
+          </ContextMenuPrimitive.Item>
+          <ContextMenuPrimitive.Separator className={ctxSepClass} />
+          <ContextMenuPrimitive.Item className={`${ctxItemClass} text-destructive data-highlighted:text-destructive`} onClick={() => void deleteFile(entry.path)}>
+            <Trash2 className="h-4 w-4" /> Delete
+          </ContextMenuPrimitive.Item>
+        </ContextMenuPrimitive.Content>
+      </ContextMenuPrimitive.Portal>
+    </ContextMenuPrimitive.Root>
+  )
+}
+
+// ─── Icon toolbar button ────────────────────────────────────────────────────
+
+function ToolbarButton({
+  icon: Icon,
+  label,
+  onClick,
+}: {
+  icon: React.ComponentType<{ className?: string }>
+  label: string
+  onClick: () => void
+}): React.JSX.Element {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+          onClick={onClick}
+        >
+          <Icon className="h-4 w-4" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom" sideOffset={4}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+// ─── Main file tree ─────────────────────────────────────────────────────────
+
+type RootCreate = 'file' | 'diagram' | 'deck' | 'folder' | null
+
+/**
+ * The vault file tree panel. Shows the full tree with an icon toolbar
+ * at the top, right-click context menus, and drag-and-drop to move
+ * files/folders. Items can be dragged to the root drop zone to move
+ * them to the vault root.
+ * @returns The rendered file tree.
+ */
+export function VaultFileTree(): React.JSX.Element | null {
+  const { tree, vaultPath, createFile, createDirectory, openFile, renameFile } = useVault()
+  const [creating, setCreating] = useState<RootCreate>(null)
+  const [rootDragOver, setRootDragOver] = useState(false)
+
+  if (!vaultPath) return null
+
+  const placeholder: Record<Exclude<RootCreate, null>, string> = {
+    file: 'note.md',
+    diagram: 'diagram.diagram',
+    deck: 'flashcards.deck',
+    folder: 'folder name',
+  }
+
+  /** Handle drop at the vault root level — moves item to root. */
+  const handleRootDrop = async (e: React.DragEvent): Promise<void> => {
+    e.preventDefault()
+    setRootDragOver(false)
+    const sourcePath = e.dataTransfer.getData('text/plain')
+    if (!sourcePath) return
+    const name = sourcePath.split('/').pop() ?? sourcePath
+    // Already at root?
+    if (!sourcePath.includes('/')) return
+    try {
+      await renameFile(sourcePath, name)
+    } catch { /* move failed */ }
+  }
+
+  return (
+    <div
+      className={cn('flex flex-col gap-1 py-1', rootDragOver && 'bg-primary/5')}
+      onDragOver={(e) => { e.preventDefault(); setRootDragOver(true) }}
+      onDragLeave={() => setRootDragOver(false)}
+      onDrop={(e) => void handleRootDrop(e)}
+    >
+      {/* Icon toolbar */}
+      <div className="mb-1 flex items-center justify-end gap-0.5 px-2">
+        <ToolbarButton icon={FilePlus} label="New file" onClick={() => setCreating('file')} />
+        <ToolbarButton icon={Network} label="New diagram" onClick={() => setCreating('diagram')} />
+        <ToolbarButton icon={Layers} label="New deck" onClick={() => setCreating('deck')} />
+        <ToolbarButton icon={FolderPlus} label="New folder" onClick={() => setCreating('folder')} />
+      </div>
+
+      {creating && (
+        <InlineNameInput
+          placeholder={placeholder[creating]}
+          onCommit={async (name) => {
+            const kind = creating
+            setCreating(null)
+            if (kind === 'folder') {
+              await createDirectory(name)
+            } else {
+              let finalName = name
+              if (kind === 'diagram' && !name.endsWith('.diagram')) finalName = name + '.diagram'
+              if (kind === 'deck' && !name.endsWith('.deck')) finalName = name + '.deck'
+              const actual = await createFile(finalName, initialContent(finalName))
+              openFile(actual)
+            }
+          }}
+          onCancel={() => setCreating(null)}
+        />
+      )}
+
+      {tree.length === 0 && !creating && (
+        <p className="px-4 py-6 text-center text-xs text-muted-foreground">
+          Vault is empty. Create a file to get started.
+        </p>
+      )}
+
+      {tree.map((entry) => (
+        <FileTreeNode key={entry.path} entry={entry} depth={0} />
+      ))}
+    </div>
+  )
+}

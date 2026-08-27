@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "c4-diagram",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "/Users/amanhogan/dev/c4-diagram"],
+      "port": 3000
+    },
+    {
+      "name": "proxmox-visualizer",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "/Users/amanhogan/dev/proxmox-visualizer", "--", "--port", "3010"],
+      "port": 3010
+    },
+    {
+      "name": "kubenex",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "/Users/amanhogan/dev/kubenex", "--", "--port", "3020"],
+      "port": 3020
+    }
+  ]
+}

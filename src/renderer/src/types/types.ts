@@ -480,3 +480,13 @@ export type QuickAccomplishment = {
   createdAt: string
   updatedAt: string
 }
+
+// ─── Vault ────────────────────────────────────────────────────────────────────
+
+export type VaultEntry = {
+  path: string
+  name: string
+  type: 'file' | 'directory'
+  extension: string
+  children?: VaultEntry[]
+}

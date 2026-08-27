@@ -1,12 +1,22 @@
 import type {
   BusinessCommitmentOne,
-  BusinessCommitmentTwo,
   DevelopmentCommitmentOne,
-  DevelopmentCommitmentTwo,
   ActionItem,
   Skill,
 } from "@/types/types"
-import { getModulesForItem, getDcomm2SubEvents, getSubEventsForBcomm2 } from "@/lib/actions"
+import { getModulesForItem } from "@/lib/actions"
+
+// Stubs for removed features (TDP Program Impact, Innovation Commitments)
+// These types and functions are kept for backward compatibility with existing
+// export functions that may still be called from other code paths.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type BusinessCommitmentTwo = any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type DevelopmentCommitmentTwo = any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const getDcomm2SubEvents = (_eventId: number): Promise<any[]> => Promise.resolve([])
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const getSubEventsForBcomm2 = (_eventId: number): Promise<any[]> => Promise.resolve([])
 
 function downloadMarkdown(content: string, filename: string): void {
   const blob = new Blob([content], { type: "text/markdown;charset=utf-8" })

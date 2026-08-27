@@ -8,17 +8,6 @@ import type {
   LearningModule,
   CreateLearningModuleDTO,
   UpdateLearningModuleDTO,
-  DevelopmentCommitmentTwo,
-  CreateDevelopmentCommitmentTwoDTO,
-  EventSubItem,
-  CreateEventSubItemDTO,
-  UpdateEventSubItemDTO,
-  BusinessCommitmentTwo,
-  CreateBusinessCommitmentTwoDTO,
-  UpdateBusinessCommitmentTwoDTO,
-  SubEvent,
-  CreateSubEventDTO,
-  UpdateSubEventDTO,
   OneOnOne,
   CreateOneOnOneDTO,
   UpdateOneOnOneDTO,
@@ -70,58 +59,6 @@ export const updateLearningModule = (moduleId: number, payload: UpdateLearningMo
 
 export const deleteLearningModule = (moduleId: number): Promise<void> =>
   api.dcomm1.deleteModule(moduleId)
-
-// ─── Development Commitments Two ─────────────────────────────────────────────
-
-export const getAllDevelopmentCommitmentsTwo = (): Promise<DevelopmentCommitmentTwo[]> =>
-  api.dcomm2.getAll() as Promise<DevelopmentCommitmentTwo[]>
-
-export const createDevelopmentCommitmentTwo = (payload: CreateDevelopmentCommitmentTwoDTO): Promise<DevelopmentCommitmentTwo> =>
-  api.dcomm2.create(payload) as Promise<DevelopmentCommitmentTwo>
-
-export const updateDevelopmentCommitmentTwo = (id: number, payload: CreateDevelopmentCommitmentTwoDTO): Promise<DevelopmentCommitmentTwo> =>
-  api.dcomm2.update(id, payload) as Promise<DevelopmentCommitmentTwo>
-
-export const deleteDevelopmentCommitmentTwo = (id: number): Promise<void> =>
-  api.dcomm2.delete(id)
-
-export const getDcomm2SubEvents = (eventId: number): Promise<EventSubItem[]> =>
-  api.dcomm2.getSubEvents(eventId) as Promise<EventSubItem[]>
-
-export const createDcomm2SubEvent = (eventId: number, payload: CreateEventSubItemDTO): Promise<EventSubItem> =>
-  api.dcomm2.createSubEvent(eventId, payload) as Promise<EventSubItem>
-
-export const updateDcomm2SubEvent = (subItemId: number, payload: UpdateEventSubItemDTO): Promise<EventSubItem> =>
-  api.dcomm2.updateSubEvent(subItemId, payload) as Promise<EventSubItem>
-
-export const deleteDcomm2SubEvent = (subItemId: number): Promise<void> =>
-  api.dcomm2.deleteSubEvent(subItemId)
-
-// ─── Business Commitments Two ─────────────────────────────────────────────────
-
-export const getAllBusinessCommitmentsTwo = (): Promise<BusinessCommitmentTwo[]> =>
-  api.bcomm2.getAll() as Promise<BusinessCommitmentTwo[]>
-
-export const createBusinessCommitmentTwo = (payload: CreateBusinessCommitmentTwoDTO): Promise<BusinessCommitmentTwo> =>
-  api.bcomm2.create(payload) as Promise<BusinessCommitmentTwo>
-
-export const updateBusinessCommitmentTwo = (id: number, payload: UpdateBusinessCommitmentTwoDTO): Promise<BusinessCommitmentTwo> =>
-  api.bcomm2.update(id, payload) as Promise<BusinessCommitmentTwo>
-
-export const deleteBusinessCommitmentTwo = (id: number): Promise<void> =>
-  api.bcomm2.delete(id)
-
-export const getSubEventsForBcomm2 = (eventId: number): Promise<SubEvent[]> =>
-  api.bcomm2.getSubEvents(eventId) as Promise<SubEvent[]>
-
-export const createSubEventForBcomm2 = (eventId: number, payload: CreateSubEventDTO): Promise<SubEvent> =>
-  api.bcomm2.createSubEvent(eventId, payload) as Promise<SubEvent>
-
-export const updateBcomm2SubEvent = (subEventId: number, payload: UpdateSubEventDTO): Promise<SubEvent> =>
-  api.bcomm2.updateSubEvent(subEventId, payload) as Promise<SubEvent>
-
-export const deleteBcomm2SubEvent = (subEventId: number): Promise<void> =>
-  api.bcomm2.deleteSubEvent(subEventId)
 
 // ─── One on One ───────────────────────────────────────────────────────────────
 

@@ -2,7 +2,7 @@ import Database from 'better-sqlite3'
 import { app } from 'electron'
 import { join } from 'path'
 
-const db = new Database(join(app.getPath('userData'), 'commitments.db'))
+const db = new Database(join(app.getPath('userData'), 'workspace.db'))
 db.pragma('journal_mode = WAL')
 db.pragma('foreign_keys = ON')
 
@@ -54,27 +54,6 @@ db.exec(`
     UNIQUE(type, category)
   );
 
-  CREATE TABLE IF NOT EXISTS midyear_checkins (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL DEFAULT 'Mid-Year Check-in',
-    businessAccomplishments TEXT DEFAULT '',
-    developmentProgress TEXT DEFAULT '',
-    goingForwardPriorities TEXT DEFAULT '',
-    createdAt TEXT DEFAULT (datetime('now')),
-    updatedAt TEXT DEFAULT (datetime('now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS endofyear_reviews (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL DEFAULT 'End-of-Year Review',
-    bcomm1Notes TEXT DEFAULT '',
-    bcomm2Notes TEXT DEFAULT '',
-    dcomm1Notes TEXT DEFAULT '',
-    dcomm2Notes TEXT DEFAULT '',
-    createdAt TEXT DEFAULT (datetime('now')),
-    updatedAt TEXT DEFAULT (datetime('now'))
-  );
-
   CREATE TABLE IF NOT EXISTS quick_accomplishments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     category TEXT NOT NULL,
@@ -96,70 +75,6 @@ db.exec(`
     finished INTEGER DEFAULT 0,
     required INTEGER DEFAULT 0,
     description TEXT,
-    createdAt TEXT DEFAULT (datetime('now')),
-    updatedAt TEXT DEFAULT (datetime('now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS development_commitments_two (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    eventName TEXT NOT NULL,
-    type TEXT,
-    applicationContext TEXT,
-    description TEXT,
-    impact TEXT,
-    started TEXT,
-    finished TEXT,
-    done INTEGER DEFAULT 0,
-    required INTEGER DEFAULT 0,
-    createdAt TEXT DEFAULT (datetime('now')),
-    updatedAt TEXT DEFAULT (datetime('now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS progressions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    businessEntries TEXT DEFAULT '[]',
-    programEntries TEXT DEFAULT '[]',
-    developmentEntries TEXT DEFAULT '[]',
-    createdAt TEXT DEFAULT (datetime('now')),
-    updatedAt TEXT DEFAULT (datetime('now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS event_sub_items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    eventId INTEGER NOT NULL REFERENCES development_commitments_two(id) ON DELETE CASCADE,
-    subEventName TEXT NOT NULL,
-    description TEXT,
-    started TEXT,
-    finished TEXT,
-    done INTEGER DEFAULT 0,
-    createdAt TEXT DEFAULT (datetime('now')),
-    updatedAt TEXT DEFAULT (datetime('now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS business_commitments_two (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    eventName TEXT NOT NULL,
-    type TEXT,
-    done INTEGER DEFAULT 0,
-    started TEXT,
-    finished TEXT,
-    required INTEGER DEFAULT 0,
-    applicationContext TEXT,
-    description TEXT,
-    impact TEXT,
-    createdAt TEXT DEFAULT (datetime('now')),
-    updatedAt TEXT DEFAULT (datetime('now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS sub_events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    eventId INTEGER NOT NULL REFERENCES business_commitments_two(id) ON DELETE CASCADE,
-    subEventName TEXT NOT NULL,
-    description TEXT,
-    started TEXT,
-    finished TEXT,
-    done INTEGER DEFAULT 0,
     createdAt TEXT DEFAULT (datetime('now')),
     updatedAt TEXT DEFAULT (datetime('now'))
   );
@@ -438,71 +353,6 @@ export const dcomm1 = {
   deleteModule: (moduleId: number) => { db.prepare('DELETE FROM learning_modules WHERE id=?').run(moduleId) }
 }
 
-// ─── Development Commitments Two ─────────────────────────────────────────────
-
-export const dcomm2 = {
-  getAll: () => normalizeAll(db.prepare('SELECT * FROM development_commitments_two ORDER BY createdAt DESC').all() as Record<string, unknown>[]),
-  create: (p_raw: Record<string, unknown>) => {
-    const p = sanitize(p_raw)
-    const r = db.prepare('INSERT INTO development_commitments_two (eventName,type,applicationContext,description,impact,started,finished,done,required) VALUES (?,?,?,?,?,?,?,?,?)').run(p.eventName,p.type??null,p.applicationContext??null,p.description??null,p.impact??null,p.started??null,p.finished??null,p.done??0,p.required??0)
-    return normalize(db.prepare('SELECT * FROM development_commitments_two WHERE id=?').get(r.lastInsertRowid) as Record<string, unknown>)
-  },
-  update: (id: number, p_raw: Record<string, unknown>) => {
-    const p = sanitize(p_raw)
-    db.prepare("UPDATE development_commitments_two SET eventName=?,type=?,applicationContext=?,description=?,impact=?,started=?,finished=?,done=?,required=?,updatedAt=datetime('now') WHERE id=?").run(p.eventName,p.type??null,p.applicationContext??null,p.description??null,p.impact??null,p.started??null,p.finished??null,p.done??0,p.required??0,id)
-    return normalize(db.prepare('SELECT * FROM development_commitments_two WHERE id=?').get(id) as Record<string, unknown>)
-  },
-  delete: (id: number) => { db.prepare('DELETE FROM development_commitments_two WHERE id=?').run(id) },
-  getSubEvents: (eventId: number) => normalizeAll(db.prepare('SELECT * FROM event_sub_items WHERE eventId=? ORDER BY createdAt ASC').all(eventId) as Record<string, unknown>[]),
-  createSubEvent: (eventId: number, p_raw: Record<string, unknown>) => {
-    const p = sanitize(p_raw)
-    const r = db.prepare('INSERT INTO event_sub_items (eventId,subEventName,description,started,finished,done) VALUES (?,?,?,?,?,?)').run(eventId,p.subEventName,p.description??null,p.started??null,p.finished??null,p.done??0)
-    return normalize(db.prepare('SELECT * FROM event_sub_items WHERE id=?').get(r.lastInsertRowid) as Record<string, unknown>)
-  },
-  updateSubEvent: (subItemId: number, p_raw: Record<string, unknown>) => {
-    const p = sanitize(p_raw)
-    db.prepare("UPDATE event_sub_items SET subEventName=?,description=?,started=?,finished=?,done=?,updatedAt=datetime('now') WHERE id=?").run(p.subEventName,p.description??null,p.started??null,p.finished??null,p.done??0,subItemId)
-    return normalize(db.prepare('SELECT * FROM event_sub_items WHERE id=?').get(subItemId) as Record<string, unknown>)
-  },
-  deleteSubEvent: (subItemId: number) => { db.prepare('DELETE FROM event_sub_items WHERE id=?').run(subItemId) }
-}
-
-// ─── Business Commitments Two ─────────────────────────────────────────────────
-
-export const bcomm2 = {
-  getAll: () => {
-    const events = normalizeAll(db.prepare('SELECT * FROM business_commitments_two ORDER BY createdAt DESC').all() as Record<string, unknown>[])
-    return events.map(ev => ({
-      ...ev,
-      subEvents: normalizeAll(db.prepare('SELECT * FROM sub_events WHERE eventId=? ORDER BY createdAt ASC').all(ev.id as number) as Record<string, unknown>[])
-    }))
-  },
-  create: (p_raw: Record<string, unknown>) => {
-    const p = sanitize(p_raw)
-    const r = db.prepare('INSERT INTO business_commitments_two (eventName,type,done,started,finished,required,applicationContext,description,impact) VALUES (?,?,?,?,?,?,?,?,?)').run(p.eventName,p.type??null,p.done??0,p.started??null,p.finished??null,p.required??0,p.applicationContext??null,p.description??null,p.impact??null)
-    const ev = normalize(db.prepare('SELECT * FROM business_commitments_two WHERE id=?').get(r.lastInsertRowid) as Record<string, unknown>)
-    return { ...ev, subEvents: [] }
-  },
-  update: (id: number, p_raw: Record<string, unknown>) => {
-    const p = sanitize(p_raw)
-    db.prepare("UPDATE business_commitments_two SET eventName=?,type=?,done=?,started=?,finished=?,required=?,applicationContext=?,description=?,impact=?,updatedAt=datetime('now') WHERE id=?").run(p.eventName,p.type??null,p.done??0,p.started??null,p.finished??null,p.required??0,p.applicationContext??null,p.description??null,p.impact??null,id)
-    return normalize(db.prepare('SELECT * FROM business_commitments_two WHERE id=?').get(id) as Record<string, unknown>)
-  },
-  delete: (id: number) => { db.prepare('DELETE FROM business_commitments_two WHERE id=?').run(id) },
-  getSubEvents: (eventId: number) => normalizeAll(db.prepare('SELECT * FROM sub_events WHERE eventId=? ORDER BY createdAt ASC').all(eventId) as Record<string, unknown>[]),
-  createSubEvent: (eventId: number, p_raw: Record<string, unknown>) => {
-    const p = sanitize(p_raw)
-    const r = db.prepare('INSERT INTO sub_events (eventId,subEventName,description,started,finished,done) VALUES (?,?,?,?,?,?)').run(eventId,p.subEventName,p.description??null,p.started??null,p.finished??null,p.done??0)
-    return normalize(db.prepare('SELECT * FROM sub_events WHERE id=?').get(r.lastInsertRowid) as Record<string, unknown>)
-  },
-  updateSubEvent: (subEventId: number, p_raw: Record<string, unknown>) => {
-    const p = sanitize(p_raw)
-    db.prepare("UPDATE sub_events SET subEventName=?,description=?,started=?,finished=?,done=?,updatedAt=datetime('now') WHERE id=?").run(p.subEventName,p.description??null,p.started??null,p.finished??null,p.done??0,subEventId)
-    return normalize(db.prepare('SELECT * FROM sub_events WHERE id=?').get(subEventId) as Record<string, unknown>)
-  },
-  deleteSubEvent: (subEventId: number) => { db.prepare('DELETE FROM sub_events WHERE id=?').run(subEventId) }
-}
-
 // ─── One on One ───────────────────────────────────────────────────────────────
 
 export const oneOnOne = {
@@ -770,103 +620,6 @@ export const skills = {
     return normalize(db.prepare('SELECT * FROM skills WHERE id=?').get(id) as Record<string, unknown>)
   },
   delete: (id: number) => { db.prepare('DELETE FROM skills WHERE id=?').run(id) }
-}
-
-// ─── Progressions ─────────────────────────────────────────────────────────────
-
-function parseProgressionRow(row: Record<string, unknown>): Record<string, unknown> {
-  return {
-    ...row,
-    businessEntries: (() => { try { return JSON.parse(row.businessEntries as string) } catch { return [] } })(),
-    programEntries: (() => { try { return JSON.parse(row.programEntries as string) } catch { return [] } })(),
-    developmentEntries: (() => { try { return JSON.parse(row.developmentEntries as string) } catch { return [] } })(),
-  }
-}
-
-export const progressions = {
-  getAll: () => {
-    const rows = db.prepare('SELECT * FROM progressions ORDER BY updatedAt DESC').all() as Record<string, unknown>[]
-    return rows.map(parseProgressionRow)
-  },
-  create: (p: Record<string, unknown>) => {
-    const r = db.prepare('INSERT INTO progressions (title,businessEntries,programEntries,developmentEntries) VALUES (?,?,?,?)').run(
-      p.title,
-      JSON.stringify(Array.isArray(p.businessEntries) ? p.businessEntries : []),
-      JSON.stringify(Array.isArray(p.programEntries) ? p.programEntries : []),
-      JSON.stringify(Array.isArray(p.developmentEntries) ? p.developmentEntries : []),
-    )
-    return parseProgressionRow(db.prepare('SELECT * FROM progressions WHERE id=?').get(r.lastInsertRowid) as Record<string, unknown>)
-  },
-  update: (id: number, p: Record<string, unknown>) => {
-    db.prepare("UPDATE progressions SET title=?,businessEntries=?,programEntries=?,developmentEntries=?,updatedAt=datetime('now') WHERE id=?").run(
-      p.title,
-      JSON.stringify(Array.isArray(p.businessEntries) ? p.businessEntries : []),
-      JSON.stringify(Array.isArray(p.programEntries) ? p.programEntries : []),
-      JSON.stringify(Array.isArray(p.developmentEntries) ? p.developmentEntries : []),
-      id,
-    )
-    return parseProgressionRow(db.prepare('SELECT * FROM progressions WHERE id=?').get(id) as Record<string, unknown>)
-  },
-  delete: (id: number) => { db.prepare('DELETE FROM progressions WHERE id=?').run(id) }
-}
-
-// ─── Reviews (mid-year / end-of-year) ────────────────────────────────────────
-
-export const reviews = {
-  getAll: () => db.prepare('SELECT * FROM reviews').all(),
-  upsert: (type: string, category: string, selfAssessment: string, rating: number) => {
-    db.prepare(`
-      INSERT INTO reviews (type, category, selfAssessment, rating, updatedAt)
-      VALUES (?, ?, ?, ?, datetime('now'))
-      ON CONFLICT(type, category) DO UPDATE SET
-        selfAssessment=excluded.selfAssessment,
-        rating=excluded.rating,
-        updatedAt=excluded.updatedAt
-    `).run(type, category, selfAssessment, rating)
-    return db.prepare('SELECT * FROM reviews WHERE type=? AND category=?').get(type, category)
-  }
-}
-
-// ─── Mid-year Check-ins ───────────────────────────────────────────────────────
-
-export const midyear = {
-  getAll: () => db.prepare('SELECT * FROM midyear_checkins ORDER BY createdAt DESC').all(),
-  create: (p: Record<string, unknown>) => {
-    const r = db.prepare(`
-      INSERT INTO midyear_checkins (title, businessAccomplishments, developmentProgress, goingForwardPriorities)
-      VALUES (?, ?, ?, ?)
-    `).run(p.title ?? 'Mid-Year Check-in', p.businessAccomplishments ?? '', p.developmentProgress ?? '', p.goingForwardPriorities ?? '')
-    return db.prepare('SELECT * FROM midyear_checkins WHERE id=?').get(r.lastInsertRowid)
-  },
-  update: (id: number, p: Record<string, unknown>) => {
-    db.prepare(`
-      UPDATE midyear_checkins SET title=?, businessAccomplishments=?, developmentProgress=?, goingForwardPriorities=?, updatedAt=datetime('now')
-      WHERE id=?
-    `).run(p.title, p.businessAccomplishments ?? '', p.developmentProgress ?? '', p.goingForwardPriorities ?? '', id)
-    return db.prepare('SELECT * FROM midyear_checkins WHERE id=?').get(id)
-  },
-  delete: (id: number) => { db.prepare('DELETE FROM midyear_checkins WHERE id=?').run(id) }
-}
-
-// ─── End-of-year Reviews ──────────────────────────────────────────────────────
-
-export const endofyear = {
-  getAll: () => db.prepare('SELECT * FROM endofyear_reviews ORDER BY createdAt DESC').all(),
-  create: (p: Record<string, unknown>) => {
-    const r = db.prepare(`
-      INSERT INTO endofyear_reviews (title, bcomm1Notes, bcomm2Notes, dcomm1Notes, dcomm2Notes)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(p.title ?? 'End-of-Year Review', p.bcomm1Notes ?? '', p.bcomm2Notes ?? '', p.dcomm1Notes ?? '', p.dcomm2Notes ?? '')
-    return db.prepare('SELECT * FROM endofyear_reviews WHERE id=?').get(r.lastInsertRowid)
-  },
-  update: (id: number, p: Record<string, unknown>) => {
-    db.prepare(`
-      UPDATE endofyear_reviews SET title=?, bcomm1Notes=?, bcomm2Notes=?, dcomm1Notes=?, dcomm2Notes=?, updatedAt=datetime('now')
-      WHERE id=?
-    `).run(p.title, p.bcomm1Notes ?? '', p.bcomm2Notes ?? '', p.dcomm1Notes ?? '', p.dcomm2Notes ?? '', id)
-    return db.prepare('SELECT * FROM endofyear_reviews WHERE id=?').get(id)
-  },
-  delete: (id: number) => { db.prepare('DELETE FROM endofyear_reviews WHERE id=?').run(id) }
 }
 
 // ─── Quick Accomplishments ────────────────────────────────────────────────────

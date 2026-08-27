@@ -17,26 +17,6 @@ interface DbApi {
     updateModule: (moduleId: number, payload: unknown) => Promise<unknown>
     deleteModule: (moduleId: number) => Promise<void>
   }
-  dcomm2: {
-    getAll: () => Promise<unknown[]>
-    create: (payload: unknown) => Promise<unknown>
-    update: (id: number, payload: unknown) => Promise<unknown>
-    delete: (id: number) => Promise<void>
-    getSubEvents: (eventId: number) => Promise<unknown[]>
-    createSubEvent: (eventId: number, payload: unknown) => Promise<unknown>
-    updateSubEvent: (subItemId: number, payload: unknown) => Promise<unknown>
-    deleteSubEvent: (subItemId: number) => Promise<void>
-  }
-  bcomm2: {
-    getAll: () => Promise<unknown[]>
-    create: (payload: unknown) => Promise<unknown>
-    update: (id: number, payload: unknown) => Promise<unknown>
-    delete: (id: number) => Promise<void>
-    getSubEvents: (eventId: number) => Promise<unknown[]>
-    createSubEvent: (eventId: number, payload: unknown) => Promise<unknown>
-    updateSubEvent: (subEventId: number, payload: unknown) => Promise<unknown>
-    deleteSubEvent: (subEventId: number) => Promise<void>
-  }
   oneOnOne: {
     getAll: () => Promise<unknown[]>
     create: (payload: unknown) => Promise<unknown>
@@ -98,28 +78,6 @@ interface DbApi {
     updateLabel: (id: number, label: string) => Promise<unknown>
     delete: (id: number) => Promise<void>
   }
-  progressions: {
-    getAll: () => Promise<unknown[]>
-    create: (payload: unknown) => Promise<unknown>
-    update: (id: number, payload: unknown) => Promise<unknown>
-    delete: (id: number) => Promise<void>
-  }
-  reviews: {
-    getAll: () => Promise<unknown[]>
-    upsert: (type: string, category: string, selfAssessment: string, rating: number) => Promise<unknown>
-  }
-  midyear: {
-    getAll: () => Promise<unknown[]>
-    create: (payload: unknown) => Promise<unknown>
-    update: (id: number, payload: unknown) => Promise<unknown>
-    delete: (id: number) => Promise<void>
-  }
-  endofyear: {
-    getAll: () => Promise<unknown[]>
-    create: (payload: unknown) => Promise<unknown>
-    update: (id: number, payload: unknown) => Promise<unknown>
-    delete: (id: number) => Promise<void>
-  }
   quickAccomplishments: {
     getAll: () => Promise<unknown[]>
     create: (payload: unknown) => Promise<unknown>
@@ -152,6 +110,35 @@ interface DbApi {
     exportGroup: (groupName: string, noteList: { title: string; content: string }[]) => Promise<number>
     importFiles: (groupId: number) => Promise<unknown[]>
   }
+  vault: {
+    getPath: () => Promise<string | null>
+    pick: () => Promise<string | null>
+    open: (vaultPath: string) => Promise<void>
+    getTree: () => Promise<VaultEntry[]>
+    getAbsolutePath: (relPath: string) => Promise<string>
+    readFile: (relPath: string) => Promise<string>
+    readFileBinary: (relPath: string) => Promise<ArrayBuffer>
+    writeFile: (relPath: string, content: string) => Promise<void>
+    createFile: (relPath: string, content?: string) => Promise<string>
+    deleteFile: (relPath: string) => Promise<void>
+    renameFile: (oldPath: string, newPath: string) => Promise<string>
+    createDirectory: (relPath: string) => Promise<void>
+    deleteDirectory: (relPath: string) => Promise<void>
+    search: (query: string, limit?: number) => Promise<{ path: string; name: string; type: string; snippet: string }[]>
+    getTags: () => Promise<{ tag: string; files: string[]; count: number }[]>
+    showInExplorer: (relPath: string) => Promise<void>
+    openInDefaultApp: (relPath: string) => Promise<string>
+    onTreeChanged: (callback: (tree: VaultEntry[]) => void) => () => void
+    onFileChanged: (callback: (relPath: string) => void) => () => void
+  }
+}
+
+interface VaultEntry {
+  path: string
+  name: string
+  type: 'file' | 'directory'
+  extension: string
+  children?: VaultEntry[]
 }
 
 declare global {
