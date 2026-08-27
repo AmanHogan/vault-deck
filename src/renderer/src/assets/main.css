@@ -164,6 +164,35 @@
   background: #f0f5ff;
 }
 
+/* ── Scrollbar — thin, dark, auto-hiding ─────────────────────────────────
+   Hides the white Chromium scrollbar across the entire app. Scrolling still
+   works via mouse-wheel / trackpad; a subtle track only appears on hover. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+*:hover {
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+/* WebKit (Electron/Chromium) */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 3px;
+}
+*:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
 /* ── Custom title bar — frameless window drag regions ── */
 .titlebar-drag {
   -webkit-app-region: drag;

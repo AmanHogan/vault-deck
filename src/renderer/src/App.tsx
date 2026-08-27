@@ -3,6 +3,7 @@ import { AppSidebar } from './components/app-sidebar'
 import { Toaster } from './components/ui/sonner'
 import { TooltipProvider } from './components/ui/tooltip'
 import { VaultProvider, useVault } from './lib/vault-context'
+import { EditorThemeProvider } from './lib/editor-theme-context'
 import DashboardPage from './pages/DashboardPage'
 import BusinessCommitmentsPage from './pages/BusinessCommitmentsPage'
 import DevelopmentCommitmentsOnePage from './pages/DevelopmentCommitmentsOnePage'
@@ -62,6 +63,7 @@ function Layout({ children }: { children: React.ReactNode }): React.JSX.Element 
 export default function App(): React.JSX.Element {
   return (
     <TooltipProvider>
+    <EditorThemeProvider>
     <VaultProvider>
       <Toaster richColors position="bottom-right" />
       <HashRouter>
@@ -80,6 +82,7 @@ export default function App(): React.JSX.Element {
         </Layout>
       </HashRouter>
     </VaultProvider>
+    </EditorThemeProvider>
     </TooltipProvider>
   )
 }

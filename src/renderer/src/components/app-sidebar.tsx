@@ -6,7 +6,7 @@
  * depending on which rail icon is selected.
  */
 
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, type ChangeEvent } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard,
@@ -24,12 +24,14 @@ import {
   FilePlus,
   Network,
   Layers,
+  RotateCcw,
   type LucideIcon,
 } from 'lucide-react'
 import { VaultFileTree } from '@/components/vault-file-tree'
 import type { VaultEntry } from '@/types/types'
 import { SearchPanel } from '@/components/search-panel'
 import { useVault } from '@/lib/vault-context'
+import { useEditorTheme, type EditorThemeSettings } from '@/lib/editor-theme-context'
 import { cn } from '@/lib/utils'
 import {
   Tooltip,
@@ -162,13 +164,120 @@ function FilesPanel(): React.JSX.Element {
   )
 }
 
-// ─── SettingsPanel placeholder ────────────────────────────────────────────────
+// ─── SettingsPanel — editor colour customisation ────────────────────────────
 
+/** Colour setting descriptor for the settings grid. */
+interface ColorSetting {
+  key: keyof EditorThemeSettings
+  label: string
+}
+
+const HEADING_COLORS: ColorSetting[] = [
+  { key: 'h1Color', label: 'H1' },
+  { key: 'h2Color', label: 'H2' },
+  { key: 'h3Color', label: 'H3' },
+  { key: 'h4Color', label: 'H4' },
+  { key: 'h5Color', label: 'H5' },
+  { key: 'h6Color', label: 'H6' },
+]
+
+const INLINE_COLORS: ColorSetting[] = [
+  { key: 'boldColor', label: 'Bold' },
+  { key: 'italicColor', label: 'Italic' },
+  { key: 'linkColor', label: 'Link' },
+  { key: 'codeColor', label: 'Code' },
+]
+
+/**
+ * Settings panel with Obsidian-style editor colour pickers.
+ * @returns The rendered settings panel.
+ */
 function SettingsPanel(): React.JSX.Element {
+  const { settings, updateSetting, resetToDefaults } = useEditorTheme()
+
+  /** Handle a native colour-picker change. */
+  const onColorChange = useCallback(
+    (key: keyof EditorThemeSettings) => (e: ChangeEvent<HTMLInputElement>) => {
+      updateSetting(key, e.target.value)
+    },
+    [updateSetting],
+  )
+
   return (
-    <div className="px-4 py-6 text-sm text-muted-foreground">
-      <p className="font-medium text-foreground">Settings</p>
-      <p className="mt-1 text-xs">Coming soon.</p>
+    <div className="flex flex-col gap-4 px-3 py-4 text-sm">
+      <div className="flex items-center justify-between">
+        <p className="font-semibold text-foreground">Editor Colors</p>
+        <button
+          type="button"
+          onClick={resetToDefaults}
+          className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          title="Reset all colours to defaults"
+        >
+          <RotateCcw className="h-3 w-3" />
+          Reset
+        </button>
+      </div>
+
+      {/* Headings */}
+      <div>
+        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
+          Headings
+        </p>
+        <div className="grid grid-cols-3 gap-2">
+          {HEADING_COLORS.map(({ key, label }) => (
+            <label key={key} className="flex items-center gap-1.5 cursor-pointer group">
+              <input
+                type="color"
+                value={settings[key]}
+                onChange={onColorChange(key)}
+                className="h-6 w-6 shrink-0 cursor-pointer rounded border border-border bg-transparent p-0 [&::-webkit-color-swatch-wrapper]:p-0.5 [&::-webkit-color-swatch]:rounded-sm [&::-webkit-color-swatch]:border-none"
+              />
+              <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors">
+                {label}
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* Inline formatting */}
+      <div>
+        <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">
+          Inline Formatting
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          {INLINE_COLORS.map(({ key, label }) => (
+            <label key={key} className="flex items-center gap-1.5 cursor-pointer group">
+              <input
+                type="color"
+                value={settings[key]}
+                onChange={onColorChange(key)}
+                className="h-6 w-6 shrink-0 cursor-pointer rounded border border-border bg-transparent p-0 [&::-webkit-color-swatch-wrapper]:p-0.5 [&::-webkit-color-swatch]:rounded-sm [&::-webkit-color-swatch]:border-none"
+              />
+              <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors">
+                {label}
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* Live preview swatch */}
+      <div className="rounded-lg border border-border bg-card/50 p-3">
+        <p className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">Preview</p>
+        <div className="flex flex-col gap-0.5 font-mono text-xs leading-relaxed">
+          <span style={{ color: settings.h1Color, fontWeight: 700, fontSize: '1.15em' }}># Heading 1</span>
+          <span style={{ color: settings.h2Color, fontWeight: 700, fontSize: '1.05em' }}>## Heading 2</span>
+          <span style={{ color: settings.h3Color, fontWeight: 700 }}>### Heading 3</span>
+          <span>
+            <span style={{ color: settings.boldColor, fontWeight: 700 }}>**bold**</span>
+            {' · '}
+            <span style={{ color: settings.italicColor, fontStyle: 'italic' }}>*italic*</span>
+          </span>
+          <span style={{ color: settings.linkColor, textDecoration: 'underline' }}>[link](url)</span>
+          <span style={{ color: settings.codeColor }}>`inline code`</span>
+        </div>
+      </div>
     </div>
   )
 }
@@ -261,46 +370,6 @@ export function AppSidebar(): React.JSX.Element {
     <div className="flex h-full">
       {/* ── Icon rail ───────────────────────────────────────────────── */}
       <div className="flex w-12 flex-col items-center gap-1 border-r border-sidebar-border bg-sidebar pt-9">
-        {/* Quick-create buttons — always visible at top of rail */}
-        <div className="flex flex-col items-center gap-1 border-b border-sidebar-border pb-2 mb-1">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={() => void newNote()}
-                className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
-              >
-                <FilePlus className="h-[16px] w-[16px]" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right" sideOffset={6}>New note</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={() => void newDiagram()}
-                className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
-              >
-                <Network className="h-[16px] w-[16px]" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right" sideOffset={6}>New diagram</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                type="button"
-                onClick={() => void newDeck()}
-                className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
-              >
-                <Layers className="h-[16px] w-[16px]" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right" sideOffset={6}>New flashcard deck</TooltipContent>
-          </Tooltip>
-        </div>
-
         {railIcons.map(({ id, label, icon: Icon }) => {
           const active = activePanel === id
           return (
@@ -329,6 +398,46 @@ export function AppSidebar(): React.JSX.Element {
 
       {/* ── Content panel (resizable) ──────────────────────────────── */}
       <div className="relative flex flex-col overflow-hidden bg-sidebar" style={{ width: panelWidth }}>
+        {/* Quick-create buttons — left-aligned, always visible */}
+        <div className="flex items-center gap-1 border-b border-sidebar-border px-2 py-1.5">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => void newNote()}
+                className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+              >
+                <FilePlus className="h-[15px] w-[15px]" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={4}>New note</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => void newDiagram()}
+                className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+              >
+                <Network className="h-[15px] w-[15px]" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={4}>New diagram</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => void newDeck()}
+                className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+              >
+                <Layers className="h-[15px] w-[15px]" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={4}>New flashcard deck</TooltipContent>
+          </Tooltip>
+        </div>
+
         <div className="flex-1 overflow-auto">
           {activePanel === 'files' && <FilesPanel />}
           {activePanel === 'search' && <SearchPanel />}

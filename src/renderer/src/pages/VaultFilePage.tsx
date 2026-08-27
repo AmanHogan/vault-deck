@@ -23,7 +23,7 @@ import { DeckEditor } from '@/components/deck-editor'
 import { Markdown } from '@/components/markdown'
 import { DocxViewer } from '@/components/docx-viewer'
 import { XlsxViewer } from '@/components/xlsx-viewer'
-import { Save, Eye, EyeOff, ExternalLink } from 'lucide-react'
+import { Save, Eye, EyeOff, ExternalLink, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react'
 
 /** Debounce delay for auto-save (ms). */
 const AUTOSAVE_DELAY = 1000
@@ -181,16 +181,10 @@ export default function VaultFilePage(): React.JSX.Element | null {
     )
   }
 
-  // ── Image preview ──
+  // ── Image preview with zoom & pan ──
   if (isImage && vaultFileUrl) {
     return (
-      <div className="flex flex-1 items-center justify-center overflow-auto bg-black/20 p-8">
-        <img
-          src={vaultFileUrl}
-          alt={openFilePath.split('/').pop() ?? ''}
-          className="max-h-full max-w-full rounded-lg object-contain shadow-lg"
-        />
-      </div>
+      <ImageViewer src={vaultFileUrl} alt={openFilePath.split('/').pop() ?? ''} />
     )
   }
 
@@ -282,6 +276,136 @@ export default function VaultFilePage(): React.JSX.Element | null {
           Loading…
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── Image viewer with zoom / pan ──────────────────────────────────────────
+
+const ZOOM_STEP = 0.25
+const MIN_ZOOM = 0.1
+const MAX_ZOOM = 10
+
+/**
+ * Zoomable / pannable image viewer with scroll-wheel zoom,
+ * click-drag panning, and toolbar controls.
+ * @param props The image src and alt text.
+ * @returns The rendered image viewer.
+ */
+function ImageViewer({ src, alt }: { src: string; alt: string }): React.JSX.Element {
+  const [zoom, setZoom] = useState(1)
+  const [pan, setPan] = useState({ x: 0, y: 0 })
+  const dragging = useRef(false)
+  const lastPos = useRef({ x: 0, y: 0 })
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  /** Clamp zoom to allowed range. */
+  const clampZoom = (z: number): number => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z))
+
+  /** Reset to fit. */
+  const resetView = useCallback(() => {
+    setZoom(1)
+    setPan({ x: 0, y: 0 })
+  }, [])
+
+  /** Mouse-wheel zoom centred on pointer. */
+  const onWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault()
+    const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP
+    setZoom((z) => clampZoom(z + delta))
+  }, [])
+
+  /** Start pan drag. */
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    dragging.current = true
+    lastPos.current = { x: e.clientX, y: e.clientY }
+    document.body.style.cursor = 'grabbing'
+    document.body.style.userSelect = 'none'
+  }, [])
+
+  /** Track pan movement. */
+  useEffect(() => {
+    const onMove = (e: MouseEvent): void => {
+      if (!dragging.current) return
+      const dx = e.clientX - lastPos.current.x
+      const dy = e.clientY - lastPos.current.y
+      lastPos.current = { x: e.clientX, y: e.clientY }
+      setPan((p) => ({ x: p.x + dx, y: p.y + dy }))
+    }
+    const onUp = (): void => {
+      dragging.current = false
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+    return () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+    }
+  }, [])
+
+  const zoomPercent = Math.round(zoom * 100)
+
+  return (
+    <div className="flex flex-1 flex-col overflow-hidden">
+      {/* Toolbar */}
+      <div className="flex items-center gap-1 border-b border-border bg-card/50 px-3 py-1.5">
+        <button
+          type="button"
+          onClick={() => setZoom((z) => clampZoom(z - ZOOM_STEP))}
+          className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+          title="Zoom out"
+        >
+          <ZoomOut className="h-3.5 w-3.5" />
+        </button>
+        <span className="min-w-[3.5rem] text-center text-xs text-muted-foreground tabular-nums">
+          {zoomPercent}%
+        </span>
+        <button
+          type="button"
+          onClick={() => setZoom((z) => clampZoom(z + ZOOM_STEP))}
+          className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+          title="Zoom in"
+        >
+          <ZoomIn className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={resetView}
+          className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+          title="Reset view"
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
+        </button>
+        <span className="ml-2 truncate text-xs text-muted-foreground">{alt}</span>
+      </div>
+
+      {/* Canvas */}
+      <div
+        ref={containerRef}
+        className="flex-1 cursor-grab overflow-hidden bg-black/20 active:cursor-grabbing"
+        onWheel={onWheel}
+        onMouseDown={onMouseDown}
+      >
+        <div
+          className="flex h-full w-full items-center justify-center"
+          style={{
+            transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+            transformOrigin: 'center center',
+            transition: dragging.current ? 'none' : 'transform 0.1s ease-out',
+          }}
+        >
+          <img
+            src={src}
+            alt={alt}
+            className="max-h-full max-w-full select-none rounded-lg object-contain shadow-lg"
+            draggable={false}
+          />
+        </div>
+      </div>
     </div>
   )
 }
