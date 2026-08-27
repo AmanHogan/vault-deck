@@ -46,6 +46,7 @@ interface VaultContextValue {
   refreshTree: () => Promise<void>
   createFile: (relPath: string, content?: string) => Promise<string>
   createDirectory: (relPath: string) => Promise<void>
+  copyFile: (relPath: string) => Promise<string>
   deleteFile: (relPath: string) => Promise<void>
   deleteDirectory: (relPath: string) => Promise<void>
   renameFile: (oldPath: string, newPath: string) => Promise<string>
@@ -172,6 +173,12 @@ export function VaultProvider({ children }: { children: ReactNode }): React.JSX.
     await refreshTree()
   }, [refreshTree])
 
+  const copyFile = useCallback(async (relPath: string) => {
+    const actual = await window.api.vault.copyFile(relPath)
+    await refreshTree()
+    return actual
+  }, [refreshTree])
+
   const deleteFile = useCallback(async (relPath: string) => {
     await window.api.vault.deleteFile(relPath)
     // Close the tab if it's open
@@ -223,6 +230,7 @@ export function VaultProvider({ children }: { children: ReactNode }): React.JSX.
         refreshTree,
         createFile,
         createDirectory,
+        copyFile,
         deleteFile,
         deleteDirectory,
         renameFile,

@@ -131,6 +131,7 @@ const api = {
     readFileBinary: (relPath: string) => ipcRenderer.invoke('vault:readFileBinary', relPath) as Promise<ArrayBuffer>,
     writeFile: (relPath: string, content: string) => ipcRenderer.invoke('vault:writeFile', relPath, content) as Promise<void>,
     createFile: (relPath: string, content?: string) => ipcRenderer.invoke('vault:createFile', relPath, content) as Promise<string>,
+    copyFile: (relPath: string) => ipcRenderer.invoke('vault:copyFile', relPath) as Promise<string>,
     deleteFile: (relPath: string) => ipcRenderer.invoke('vault:deleteFile', relPath) as Promise<void>,
     renameFile: (oldPath: string, newPath: string) => ipcRenderer.invoke('vault:renameFile', oldPath, newPath) as Promise<string>,
     createDirectory: (relPath: string) => ipcRenderer.invoke('vault:createDirectory', relPath) as Promise<void>,

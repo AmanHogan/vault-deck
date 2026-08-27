@@ -360,6 +360,7 @@ app.whenReady().then(() => {
   })
   ipcMain.handle('vault:writeFile', (_, relPath: string, content: string) => vault.writeFile(relPath, content))
   ipcMain.handle('vault:createFile', (_, relPath: string, content?: string) => vault.createFile(relPath, content))
+  ipcMain.handle('vault:copyFile', (_, relPath: string) => vault.copyFile(relPath))
   ipcMain.handle('vault:deleteFile', (_, relPath: string) => vault.deleteFile(relPath))
   ipcMain.handle('vault:renameFile', (_, oldPath: string, newPath: string) => vault.renameFile(oldPath, newPath))
   ipcMain.handle('vault:createDirectory', (_, relPath: string) => vault.createDirectory(relPath))

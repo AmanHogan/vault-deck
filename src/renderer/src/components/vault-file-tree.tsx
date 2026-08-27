@@ -4,13 +4,14 @@
  * opens it via the vault context.
  *
  * Features:
- * - Icon toolbar at the top (new file, new diagram, new deck, new folder)
- * - Right-click context menus on files and folders
+ * - Icon toolbar at the top (new file, new diagram, new deck, new folder, collapse all)
+ * - Right-click context menus on files and folders (with Duplicate / Copy)
  * - Inline rename
  * - Drag-and-drop to move files/folders into other folders
+ * - Multi-select with Ctrl+Click and Shift+Click, bulk delete
  */
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, createContext, useContext, useMemo } from 'react'
 import {
   ChevronRight,
   ChevronDown,
@@ -31,6 +32,8 @@ import {
   FileType,
   Presentation,
   ExternalLink,
+  Copy,
+  ChevronsDownUp,
 } from 'lucide-react'
 import { ContextMenu as ContextMenuPrimitive } from 'radix-ui'
 import type { VaultEntry } from '@/types/types'
@@ -66,6 +69,39 @@ function parentDir(path: string): string {
   const parts = path.split('/')
   return parts.length > 1 ? parts.slice(0, -1).join('/') : ''
 }
+
+/** Flatten a tree into a list of file paths in display order. */
+function flattenFilePaths(entries: VaultEntry[], expandedSet: Set<string>): string[] {
+  const result: string[] = []
+  for (const e of entries) {
+    if (e.type === 'file') {
+      result.push(e.path)
+    } else if (e.children && expandedSet.has(e.path)) {
+      result.push(...flattenFilePaths(e.children, expandedSet))
+    }
+  }
+  return result
+}
+
+// ─── Selection context ─────────────────────────────────────────────────────
+
+interface SelectionContextValue {
+  selected: Set<string>
+  lastClicked: string | null
+  toggleSelect: (path: string, e: React.MouseEvent) => void
+  clearSelection: () => void
+  isSelected: (path: string) => boolean
+  collapseRevision: number
+}
+
+const SelectionContext = createContext<SelectionContextValue>({
+  selected: new Set(),
+  lastClicked: null,
+  toggleSelect: () => {},
+  clearSelection: () => {},
+  isSelected: () => false,
+  collapseRevision: 0,
+})
 
 // ─── Inline name input ──────────────────────────────────────────────────────
 
@@ -181,20 +217,29 @@ interface FileTreeNodeProps {
 
 /**
  * A single node (file or folder) in the file tree, rendered recursively.
- * Supports right-click context menus and drag-and-drop to move files
- * into folders.
+ * Supports right-click context menus, drag-and-drop, multi-select, and copy.
  * @param props The entry and indentation depth.
  * @returns The rendered tree node.
  */
 function FileTreeNode({ entry, depth }: FileTreeNodeProps): React.JSX.Element {
-  const { openFilePath, openFile, createFile, createDirectory, deleteFile, deleteDirectory, renameFile } = useVault()
-  const [expanded, setExpanded] = useState(depth < 1)
+  const { openFilePath, openFile, createFile, createDirectory, deleteFile, deleteDirectory, renameFile, copyFile, refreshTree } = useVault()
+  const { selected, toggleSelect, isSelected, collapseRevision } = useContext(SelectionContext)
+
+  // Reset expanded state when collapseRevision changes (collapse all)
+  const [expandedMap, setExpandedMap] = useState<Record<number, boolean>>({})
+  const expanded = expandedMap[collapseRevision] ?? depth < 1
+  const setExpanded = useCallback((val: boolean) => {
+    setExpandedMap((prev) => ({ ...prev, [collapseRevision]: val }))
+  }, [collapseRevision])
+
   const [creatingFile, setCreatingFile] = useState<'file' | 'diagram' | 'deck' | null>(null)
   const [creatingFolder, setCreatingFolder] = useState(false)
   const [renaming, setRenaming] = useState(false)
   const [dragOver, setDragOver] = useState(false)
 
   const isActive = entry.type === 'file' && openFilePath === entry.path
+  const isMultiSelected = isSelected(entry.path)
+  const multiCount = selected.size
 
   // ── Drag source handlers ──
 
@@ -236,9 +281,21 @@ function FileTreeNode({ entry, depth }: FileTreeNodeProps): React.JSX.Element {
     } catch {
       /* move failed — name collision, etc. */
     }
-  }, [entry.path, renameFile])
+  }, [entry.path, renameFile, setExpanded])
 
-  // ── Drop on root (move to vault root) ──
+  /** Delete all selected files. */
+  const deleteSelected = useCallback(async () => {
+    const paths = Array.from(selected)
+    for (const p of paths) {
+      try {
+        await window.api.vault.deleteFile(p)
+      } catch {
+        /* some might be directories or already deleted */
+        try { await window.api.vault.deleteDirectory(p) } catch { /* ignore */ }
+      }
+    }
+    await refreshTree()
+  }, [selected, refreshTree])
 
   if (entry.type === 'directory') {
     const FolderIcon = expanded ? FolderOpen : FolderClosed
@@ -366,9 +423,17 @@ function FileTreeNode({ entry, depth }: FileTreeNodeProps): React.JSX.Element {
           onDragStart={handleDragStart}
           className={cn(
             'group flex cursor-pointer items-center gap-1.5 rounded-md px-1 py-1 text-sm hover:bg-sidebar-accent',
-            isActive && 'bg-primary/10 text-primary',
+            isActive && !isMultiSelected && 'bg-primary/10 text-primary',
+            isMultiSelected && 'bg-primary/20 ring-1 ring-primary/40',
           )}
           style={{ paddingLeft: `${depth * 12 + 20}px` }}
+          onClick={(e) => {
+            if (e.ctrlKey || e.metaKey || e.shiftKey) {
+              toggleSelect(entry.path, e)
+            } else {
+              openFile(entry.path)
+            }
+          }}
         >
           {renaming ? (
             <InlineNameInput
@@ -386,14 +451,10 @@ function FileTreeNode({ entry, depth }: FileTreeNodeProps): React.JSX.Element {
               onCancel={() => setRenaming(false)}
             />
           ) : (
-            <button
-              type="button"
-              className="flex flex-1 items-center gap-1.5 truncate text-left"
-              onClick={() => openFile(entry.path)}
-            >
+            <div className="flex flex-1 items-center gap-1.5 truncate text-left">
               <FileExtIcon ext={entry.extension} className="h-4 w-4 shrink-0 text-muted-foreground" />
               <span className="truncate">{entry.name}</span>
-            </button>
+            </div>
           )}
         </div>
       </ContextMenuPrimitive.Trigger>
@@ -404,6 +465,12 @@ function FileTreeNode({ entry, depth }: FileTreeNodeProps): React.JSX.Element {
             <FileText className="h-4 w-4" /> Open
           </ContextMenuPrimitive.Item>
           <ContextMenuPrimitive.Separator className={ctxSepClass} />
+          <ContextMenuPrimitive.Item className={ctxItemClass} onClick={() => void (async () => {
+            const newPath = await copyFile(entry.path)
+            openFile(newPath)
+          })()}>
+            <Copy className="h-4 w-4" /> Duplicate
+          </ContextMenuPrimitive.Item>
           <ContextMenuPrimitive.Item className={ctxItemClass} onClick={() => setRenaming(true)}>
             <Pencil className="h-4 w-4" /> Rename
           </ContextMenuPrimitive.Item>
@@ -415,6 +482,14 @@ function FileTreeNode({ entry, depth }: FileTreeNodeProps): React.JSX.Element {
             <ExternalLink className="h-4 w-4" /> Open in default app
           </ContextMenuPrimitive.Item>
           <ContextMenuPrimitive.Separator className={ctxSepClass} />
+          {multiCount > 1 && isMultiSelected && (
+            <ContextMenuPrimitive.Item
+              className={`${ctxItemClass} text-destructive data-highlighted:text-destructive`}
+              onClick={() => void deleteSelected()}
+            >
+              <Trash2 className="h-4 w-4" /> Delete {multiCount} selected
+            </ContextMenuPrimitive.Item>
+          )}
           <ContextMenuPrimitive.Item className={`${ctxItemClass} text-destructive data-highlighted:text-destructive`} onClick={() => void deleteFile(entry.path)}>
             <Trash2 className="h-4 w-4" /> Delete
           </ContextMenuPrimitive.Item>
@@ -459,15 +534,68 @@ type RootCreate = 'file' | 'diagram' | 'deck' | 'folder' | null
 
 /**
  * The vault file tree panel. Shows the full tree with an icon toolbar
- * at the top, right-click context menus, and drag-and-drop to move
- * files/folders. Items can be dragged to the root drop zone to move
- * them to the vault root.
+ * at the top, right-click context menus, drag-and-drop, multi-select
+ * (Ctrl/Cmd+Click, Shift+Click), Collapse All, and Duplicate.
  * @returns The rendered file tree.
  */
 export function VaultFileTree(): React.JSX.Element | null {
   const { tree, vaultPath, createFile, createDirectory, openFile, renameFile } = useVault()
   const [creating, setCreating] = useState<RootCreate>(null)
   const [rootDragOver, setRootDragOver] = useState(false)
+
+  // ── Collapse all ──
+  const [collapseRevision, setCollapseRevision] = useState(0)
+
+  // ── Multi-select state ──
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [lastClicked, setLastClicked] = useState<string | null>(null)
+
+  // Flat list of all visible file paths (for shift-select range)
+  const expandedSet = useMemo(() => new Set<string>(), [])
+  const flatPaths = useMemo(() => flattenFilePaths(tree, expandedSet), [tree, expandedSet])
+
+  const toggleSelect = useCallback((path: string, e: React.MouseEvent) => {
+    if (e.shiftKey && lastClicked) {
+      // Range select
+      const startIdx = flatPaths.indexOf(lastClicked)
+      const endIdx = flatPaths.indexOf(path)
+      if (startIdx !== -1 && endIdx !== -1) {
+        const lo = Math.min(startIdx, endIdx)
+        const hi = Math.max(startIdx, endIdx)
+        const range = flatPaths.slice(lo, hi + 1)
+        setSelected((prev) => {
+          const next = new Set(prev)
+          for (const p of range) next.add(p)
+          return next
+        })
+      }
+    } else if (e.ctrlKey || e.metaKey) {
+      // Toggle single
+      setSelected((prev) => {
+        const next = new Set(prev)
+        if (next.has(path)) next.delete(path)
+        else next.add(path)
+        return next
+      })
+    }
+    setLastClicked(path)
+  }, [lastClicked, flatPaths])
+
+  const clearSelection = useCallback(() => {
+    setSelected(new Set())
+    setLastClicked(null)
+  }, [])
+
+  const isSelected = useCallback((path: string) => selected.has(path), [selected])
+
+  const selCtx = useMemo<SelectionContextValue>(() => ({
+    selected,
+    lastClicked,
+    toggleSelect,
+    clearSelection,
+    isSelected,
+    collapseRevision,
+  }), [selected, lastClicked, toggleSelect, clearSelection, isSelected, collapseRevision])
 
   if (!vaultPath) return null
 
@@ -493,49 +621,71 @@ export function VaultFileTree(): React.JSX.Element | null {
   }
 
   return (
-    <div
-      className={cn('flex flex-col gap-1 py-1', rootDragOver && 'bg-primary/5')}
-      onDragOver={(e) => { e.preventDefault(); setRootDragOver(true) }}
-      onDragLeave={() => setRootDragOver(false)}
-      onDrop={(e) => void handleRootDrop(e)}
-    >
-      {/* Icon toolbar */}
-      <div className="mb-1 flex items-center justify-end gap-0.5 px-2">
-        <ToolbarButton icon={FilePlus} label="New file" onClick={() => setCreating('file')} />
-        <ToolbarButton icon={Network} label="New diagram" onClick={() => setCreating('diagram')} />
-        <ToolbarButton icon={Layers} label="New deck" onClick={() => setCreating('deck')} />
-        <ToolbarButton icon={FolderPlus} label="New folder" onClick={() => setCreating('folder')} />
+    <SelectionContext.Provider value={selCtx}>
+      <div
+        className={cn('flex flex-col gap-1 py-1', rootDragOver && 'bg-primary/5')}
+        onDragOver={(e) => { e.preventDefault(); setRootDragOver(true) }}
+        onDragLeave={() => setRootDragOver(false)}
+        onDrop={(e) => void handleRootDrop(e)}
+        onClick={(e) => {
+          // Click on empty space clears multi-select
+          if (e.target === e.currentTarget) clearSelection()
+        }}
+      >
+        {/* Icon toolbar */}
+        <div className="mb-1 flex items-center justify-end gap-0.5 px-2">
+          <ToolbarButton icon={FilePlus} label="New file" onClick={() => setCreating('file')} />
+          <ToolbarButton icon={Network} label="New diagram" onClick={() => setCreating('diagram')} />
+          <ToolbarButton icon={Layers} label="New deck" onClick={() => setCreating('deck')} />
+          <ToolbarButton icon={FolderPlus} label="New folder" onClick={() => setCreating('folder')} />
+          <ToolbarButton icon={ChevronsDownUp} label="Collapse all" onClick={() => setCollapseRevision((r) => r + 1)} />
+        </div>
+
+        {/* Selection count bar */}
+        {selected.size > 0 && (
+          <div className="mx-2 flex items-center gap-2 rounded-md bg-primary/10 px-2 py-1 text-xs text-primary">
+            <span>{selected.size} selected</span>
+            <button
+              type="button"
+              className="ml-auto text-muted-foreground hover:text-foreground"
+              onClick={clearSelection}
+              title="Clear selection"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        )}
+
+        {creating && (
+          <InlineNameInput
+            placeholder={placeholder[creating]}
+            onCommit={async (name) => {
+              const kind = creating
+              setCreating(null)
+              if (kind === 'folder') {
+                await createDirectory(name)
+              } else {
+                let finalName = name
+                if (kind === 'diagram' && !name.endsWith('.diagram')) finalName = name + '.diagram'
+                if (kind === 'deck' && !name.endsWith('.deck')) finalName = name + '.deck'
+                const actual = await createFile(finalName, initialContent(finalName))
+                openFile(actual)
+              }
+            }}
+            onCancel={() => setCreating(null)}
+          />
+        )}
+
+        {tree.length === 0 && !creating && (
+          <p className="px-4 py-6 text-center text-xs text-muted-foreground">
+            Vault is empty. Create a file to get started.
+          </p>
+        )}
+
+        {tree.map((entry) => (
+          <FileTreeNode key={entry.path} entry={entry} depth={0} />
+        ))}
       </div>
-
-      {creating && (
-        <InlineNameInput
-          placeholder={placeholder[creating]}
-          onCommit={async (name) => {
-            const kind = creating
-            setCreating(null)
-            if (kind === 'folder') {
-              await createDirectory(name)
-            } else {
-              let finalName = name
-              if (kind === 'diagram' && !name.endsWith('.diagram')) finalName = name + '.diagram'
-              if (kind === 'deck' && !name.endsWith('.deck')) finalName = name + '.deck'
-              const actual = await createFile(finalName, initialContent(finalName))
-              openFile(actual)
-            }
-          }}
-          onCancel={() => setCreating(null)}
-        />
-      )}
-
-      {tree.length === 0 && !creating && (
-        <p className="px-4 py-6 text-center text-xs text-muted-foreground">
-          Vault is empty. Create a file to get started.
-        </p>
-      )}
-
-      {tree.map((entry) => (
-        <FileTreeNode key={entry.path} entry={entry} depth={0} />
-      ))}
-    </div>
+    </SelectionContext.Provider>
   )
 }

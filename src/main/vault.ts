@@ -309,6 +309,29 @@ export const vault = {
   },
 
   /**
+   * Copy (duplicate) a file within the vault. Automatically appends a
+   * numeric suffix to avoid name collisions.
+   * @param relPath The relative path of the source file.
+   * @returns The relative path of the new copy.
+   */
+  async copyFile(relPath: string): Promise<string> {
+    const vaultPath = currentVaultPath ?? getSetting('vaultPath')
+    if (!vaultPath) throw new Error('No vault open')
+    const srcPath = resolveVaultPath(vaultPath, relPath)
+    const dir = dirname(srcPath)
+    const ext = extname(srcPath)
+    const base = basename(srcPath, ext)
+    let i = 1
+    let destPath = join(dir, `${base} copy${ext}`)
+    while (fs.existsSync(destPath)) {
+      i++
+      destPath = join(dir, `${base} copy ${i}${ext}`)
+    }
+    await fs.promises.copyFile(srcPath, destPath)
+    return relative(vaultPath, destPath).split(sep).join('/')
+  },
+
+  /**
    * Delete a file from the vault.
    * @param relPath The relative path of the file to delete.
    */
