@@ -86,7 +86,7 @@ const dashboardNav: NavGroup[] = [
   {
     title: 'Development',
     items: [
-      { label: 'Development Commitment', href: '/dashboard/development-commitments-one', icon: BookOpen },
+      { label: 'Development', href: '/dashboard/development-commitments-one', icon: BookOpen },
       { label: 'Skills', href: '/dashboard/skills', icon: Sparkles },
       { label: 'Resume', href: '/dashboard/resume', icon: FileText },
     ],

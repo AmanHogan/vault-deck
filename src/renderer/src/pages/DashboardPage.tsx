@@ -25,7 +25,7 @@ const sections = [
     description: 'Learning commitments, skills, and resume materials.',
     items: [
       {
-        label: 'Development Commitment',
+        label: 'Development',
         description: 'Manage learning items and training modules.',
         href: '/dashboard/development-commitments-one',
         icon: BookOpen,
