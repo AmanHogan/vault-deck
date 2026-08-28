@@ -218,7 +218,7 @@ export function FileTab(): React.JSX.Element {
     reorderTabs,
     tree,
     createFile,
-    openFile
+    openFileInNewTab
   } = useVault()
   const { splitPane, focusedPaneId } = usePaneLayout()
   const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; tabPath: string } | null>(null)
@@ -316,12 +316,12 @@ export function FileTab(): React.JSX.Element {
   // Stable array of tab IDs for SortableContext
   const tabIds = useMemo(() => openTabs, [openTabs])
 
-  /** Create a new Untitled note and open it. */
+  /** Create a new Untitled note and open it in a new tab. */
   const handleNewTab = useCallback(async (): Promise<void> => {
     const name = nextUntitledName(tree)
     const actual = await createFile(name)
-    openFile(actual)
-  }, [tree, createFile, openFile])
+    openFileInNewTab(actual)
+  }, [tree, createFile, openFileInNewTab])
 
   /** Show context menu on right-click. */
   const handleContextMenu = useCallback((e: React.MouseEvent, tabPath: string) => {

@@ -22,8 +22,7 @@ import {
   isExcalidrawFilename,
   parseObsidianExcalidraw
 } from '@/lib/obsidian-excalidraw'
-import { Markdown } from '@/components/markdown'
-import { Save, Eye, EyeOff, ExternalLink, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react'
+import { Save, ExternalLink, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react'
 
 // ── Lazy-loaded editors (code-split into separate chunks) ───────────────────
 // These are the heaviest dependencies in the app. Lazy-loading them means
@@ -91,7 +90,6 @@ export default function VaultFilePage({
   const [saving, setSaving] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [showPreview, setShowPreview] = useState(true)
   /** If this .md file is actually an Obsidian Excalidraw file, holds the decompressed scene data. */
   const [obsidianExcalidrawData, setObsidianExcalidrawData] = useState<Record<
     string,
@@ -365,22 +363,10 @@ export default function VaultFilePage({
   // ── Text editor (MD, TXT, JSON, CSV, etc.) ──
   return (
     <div className="flex h-full flex-col">
-      {/* Toolbar row — filename on left, preview + save on right */}
+      {/* Toolbar row — filename on left, save on right */}
       <div className="flex items-center gap-2 border-b border-border px-3 py-1">
         <span className="truncate text-xs font-medium text-muted-foreground">{fileName}</span>
         <div className="flex-1" />
-
-        {isMarkdown && (
-          <button
-            type="button"
-            className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
-            onClick={() => setShowPreview(!showPreview)}
-            title={showPreview ? 'Hide preview' : 'Show preview'}
-          >
-            {showPreview ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-            Preview
-          </button>
-        )}
 
         {dirty && (
           <button
@@ -401,21 +387,13 @@ export default function VaultFilePage({
 
       {loaded ? (
         <Suspense fallback={<EditorFallback />}>
-          <div className="flex flex-1 overflow-hidden">
-            <div className={isMarkdown && showPreview ? 'w-1/2 border-r' : 'w-full'}>
-              <CodeMirrorEditor
-                value={diskContent}
-                onChange={handleChange}
-                onSave={() => void save()}
-                className="h-full"
-              />
-            </div>
-            {isMarkdown && showPreview && (
-              <div className="w-1/2 overflow-auto p-6">
-                <Markdown>{content}</Markdown>
-              </div>
-            )}
-          </div>
+          <CodeMirrorEditor
+            value={diskContent}
+            onChange={handleChange}
+            onSave={() => void save()}
+            className="h-full flex-1"
+            livePreview={isMarkdown}
+          />
         </Suspense>
       ) : (
         <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">

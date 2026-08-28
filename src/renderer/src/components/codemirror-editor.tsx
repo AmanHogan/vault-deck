@@ -4,7 +4,7 @@
  * derived from the app's CSS variables so it matches dark/light mode.
  */
 
-import { useRef, useEffect, useCallback } from 'react'
+import { useRef, useEffect, useCallback, useMemo } from 'react'
 import {
   Bold, Italic, Strikethrough, Code, Heading1, Heading2, Heading3,
   List, ListOrdered, Quote, Minus, Link as LinkIcon, Underline,
@@ -18,6 +18,7 @@ import { syntaxHighlighting, defaultHighlightStyle, indentOnInput, bracketMatchi
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search'
 import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete'
 import { tags } from '@lezer/highlight'
+import { livePreview as livePreviewExt } from '@/lib/codemirror-live-preview'
 
 // ─── Theme ──────────────────────────────────────────────────────────────────
 
@@ -167,25 +168,26 @@ function toggleInlineMarker(view: EditorView, open: string, close?: string): boo
 // ─── Extensions ─────────────────────────────────────────────────────────────
 
 /**
- * Build the full set of CodeMirror extensions for the markdown editor.
+ * Build the full set of CodeMirror extensions for the editor.
  * @param onChange Called whenever the document content changes.
  * @param onSave Called when the user presses Cmd/Ctrl+S.
+ * @param useLivePreview When true, enable Obsidian-style inline rendering.
  * @returns The extension array.
  */
-function buildExtensions(onChange: (value: string) => void, onSave: () => void): Extension[] {
-  return [
-    lineNumbers(),
-    highlightActiveLineGutter(),
+function buildExtensions(
+  onChange: (value: string) => void,
+  onSave: () => void,
+  useLivePreview: boolean
+): Extension[] {
+  const base: Extension[] = [
     highlightActiveLine(),
     drawSelection(),
     rectangularSelection(),
     indentOnInput(),
     bracketMatching(),
     closeBrackets(),
-    foldGutter(),
     highlightSelectionMatches(),
     history(),
-    editorTheme,
     syntaxHighlighting(markdownHighlightStyle),
     syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
     markdown({ base: markdownLanguage, codeLanguages: languages }),
@@ -218,6 +220,16 @@ function buildExtensions(onChange: (value: string) => void, onSave: () => void):
     EditorView.lineWrapping,
     EditorView.contentAttributes.of({ spellcheck: 'true', autocorrect: 'on' }),
   ]
+
+  if (useLivePreview) {
+    // Obsidian-style: proportional font, no line numbers, inline rendering
+    base.push(...livePreviewExt)
+  } else {
+    // Source mode: monospace, line numbers, code-editor look
+    base.push(editorTheme, lineNumbers(), highlightActiveLineGutter(), foldGutter())
+  }
+
+  return base
 }
 
 // ─── Line-prefix helpers ───────────────────────────────────────────────────
@@ -322,15 +334,18 @@ interface CodeMirrorEditorProps {
   onSave: () => void
   /** Optional CSS class for the wrapper div. */
   className?: string
+  /** Enable Obsidian-style live preview (inline rendered markdown). */
+  livePreview?: boolean
 }
 
 /**
  * A CodeMirror 6 editor configured for markdown editing with syntax
- * highlighting, line numbers, code folding, and search.
- * @param props Editor props: value, onChange, onSave, className.
+ * highlighting, line numbers, code folding, and search. When
+ * `livePreview` is true, uses Obsidian-style inline rendering.
+ * @param props Editor props: value, onChange, onSave, className, livePreview.
  * @returns The rendered editor container.
  */
-export function CodeMirrorEditor({ value, onChange, onSave, className }: CodeMirrorEditorProps): React.JSX.Element {
+export function CodeMirrorEditor({ value, onChange, onSave, className, livePreview = false }: CodeMirrorEditorProps): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const onChangeRef = useRef(onChange)
@@ -340,15 +355,19 @@ export function CodeMirrorEditor({ value, onChange, onSave, className }: CodeMir
   onChangeRef.current = onChange
   onSaveRef.current = onSave
 
-  // Create the editor once on mount
+  // Memoize the livePreview flag so the effect only re-runs when it changes
+  const lp = useMemo(() => livePreview, [livePreview])
+
+  // Create the editor on mount and recreate when livePreview toggles
   useEffect(() => {
     if (!containerRef.current) return
 
     const state = EditorState.create({
-      doc: value,
+      doc: viewRef.current?.state.doc.toString() ?? value,
       extensions: buildExtensions(
         (v) => onChangeRef.current(v),
         () => onSaveRef.current(),
+        lp,
       ),
     })
 
@@ -359,8 +378,8 @@ export function CodeMirrorEditor({ value, onChange, onSave, className }: CodeMir
       view.destroy()
       viewRef.current = null
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- value is only used for initial state
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- value is only used for initial state; lp triggers rebuild
+  }, [lp])
 
   // When the external value changes (file switch), replace the editor content
   useEffect(() => {

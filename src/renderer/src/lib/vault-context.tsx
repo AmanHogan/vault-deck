@@ -11,6 +11,7 @@ import {
   useEffect,
   useCallback,
   useMemo,
+  useRef,
   type ReactNode
 } from 'react'
 import type { VaultEntry } from '@/types/types'
@@ -28,8 +29,10 @@ interface VaultContextValue {
   openTabs: string[]
   /** The currently active tab (relative path), or null */
   openFilePath: string | null
-  /** Open a file — adds a tab if not already open, switches to it */
+  /** Open a file — replaces the active tab (Obsidian-style) */
   openFile: (relPath: string) => void
+  /** Open a file in a brand-new tab (for the "+" button) */
+  openFileInNewTab: (relPath: string) => void
   /** Close a specific tab by path */
   closeTab: (relPath: string) => void
   /** Close all open tabs */
@@ -134,8 +137,38 @@ export function VaultProvider({ children }: { children: ReactNode }): React.JSX.
     if (picked) await openVault(picked)
   }, [openVault])
 
-  /** Open a file — add to tabs if not there, switch to it. */
+  // Ref so openFile can read the current activeTab inside setOpenTabs
+  const activeTabRef = useRef<string | null>(null)
+  useEffect(() => {
+    activeTabRef.current = activeTab
+  }, [activeTab])
+
+  /**
+   * Open a file — Obsidian-style: if already in a tab, switch to it;
+   * otherwise replace the currently active tab's content. When no tabs
+   * are open yet, creates the first tab.
+   */
   const openFile = useCallback((relPath: string) => {
+    setOpenTabs((prev) => {
+      // Already open in a tab — just switch
+      if (prev.includes(relPath)) return prev
+      // No tabs yet — create the first one
+      if (prev.length === 0) return [relPath]
+      // Replace the active tab
+      const current = activeTabRef.current
+      if (current && prev.includes(current)) {
+        return prev.map((t) => (t === current ? relPath : t))
+      }
+      // Fallback: replace last tab
+      const copy = [...prev]
+      copy[copy.length - 1] = relPath
+      return copy
+    })
+    setActiveTab(relPath)
+  }, [])
+
+  /** Open a file in a brand-new tab (used by the "+" button). */
+  const openFileInNewTab = useCallback((relPath: string) => {
     setOpenTabs((prev) => {
       if (prev.includes(relPath)) return prev
       return [...prev, relPath]
@@ -267,6 +300,7 @@ export function VaultProvider({ children }: { children: ReactNode }): React.JSX.
       openTabs,
       openFilePath: activeTab,
       openFile,
+      openFileInNewTab,
       closeTab,
       closeAllTabs,
       closeFile,
@@ -290,6 +324,7 @@ export function VaultProvider({ children }: { children: ReactNode }): React.JSX.
       openTabs,
       activeTab,
       openFile,
+      openFileInNewTab,
       closeTab,
       closeAllTabs,
       closeFile,
