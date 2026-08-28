@@ -498,6 +498,11 @@ app.whenReady().then(() => {
     vault.createFile(relPath, content)
   )
   ipcMain.handle('vault:copyFile', (_, relPath: string) => vault.copyFile(relPath))
+  ipcMain.handle(
+    'vault:importExternalFile',
+    (_, absolutePath: string, destRelDir: string) =>
+      vault.importExternalFile(absolutePath, destRelDir)
+  )
   ipcMain.handle('vault:deleteFile', (_, relPath: string) => vault.deleteFile(relPath))
   ipcMain.handle('vault:renameFile', (_, oldPath: string, newPath: string) =>
     vault.renameFile(oldPath, newPath)

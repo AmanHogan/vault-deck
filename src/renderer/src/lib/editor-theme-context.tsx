@@ -1,12 +1,13 @@
 /**
- * App settings context — stores user profile (display name), editor
- * theme colours, file-icon colours, and accent/highlight colour.
- * All persisted in localStorage. Colours are applied as CSS custom
- * properties on :root so CodeMirror, icons, and other components can
- * read them.
+ * App settings context — stores user profile (display name), the active
+ * app colour theme, editor syntax colours, file-icon colours, and
+ * accent/highlight colour. All persisted in localStorage. Colours are
+ * applied as CSS custom properties on :root so CodeMirror, icons, and
+ * other components can read them.
  */
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react'
+import { APP_THEMES, DEFAULT_THEME, THEME_ORDER, applyAppTheme } from '@/lib/app-themes'
 
 // ─── Editor theme defaults ──────────────────────────────────────────────────
 
@@ -33,27 +34,35 @@ export interface EditorThemeSettings {
   accentColor: string
 }
 
-const THEME_DEFAULTS: EditorThemeSettings = {
-  h1Color: '#60a5fa',
-  h2Color: '#a78bfa',
-  h3Color: '#34d399',
-  h4Color: '#fbbf24',
-  h5Color: '#f472b6',
-  h6Color: '#94a3b8',
-  boldColor: '#fafafa',
-  italicColor: '#e2e8f0',
-  linkColor: '#3b82f6',
-  codeColor: '#fb923c',
-  // Subtle, monochrome-leaning defaults
-  folderColor: '#a1a1aa',      // zinc-400
-  diagramColor: '#a1a1aa',     // zinc-400
-  excalidrawColor: '#a1a1aa',  // zinc-400
-  canvasColor: '#a1a1aa',      // zinc-400
-  deckColor: '#a1a1aa',        // zinc-400
-  imageColor: '#a1a1aa',    // zinc-400
-  documentColor: '#a1a1aa', // zinc-400
-  // Accent
-  accentColor: '#3b82f6',   // blue-500 (matches --primary)
+/**
+ * Build editor theme defaults from the active app theme's editor colours.
+ * @param themeId The active app theme key.
+ * @returns Editor theme defaults.
+ */
+function editorDefaultsForTheme(themeId: string): EditorThemeSettings {
+  const t = APP_THEMES[themeId] ?? APP_THEMES[DEFAULT_THEME]
+  return {
+    h1Color: t.editor.h1,
+    h2Color: t.editor.h2,
+    h3Color: t.editor.h3,
+    h4Color: t.editor.h4,
+    h5Color: t.editor.h5,
+    h6Color: t.editor.h6,
+    boldColor: t.editor.bold,
+    italicColor: t.editor.italic,
+    linkColor: t.editor.link,
+    codeColor: t.editor.code,
+    // Subtle, monochrome-leaning defaults
+    folderColor: '#a1a1aa',
+    diagramColor: '#a1a1aa',
+    excalidrawColor: '#a1a1aa',
+    canvasColor: '#a1a1aa',
+    deckColor: '#a1a1aa',
+    imageColor: '#a1a1aa',
+    documentColor: '#a1a1aa',
+    // Accent — match the theme's primary
+    accentColor: t.vars.primary ?? '#3b82f6'
+  }
 }
 
 // ─── User profile ───────────────────────────────────────────────────────────
@@ -63,17 +72,23 @@ export interface UserProfile {
 }
 
 const PROFILE_DEFAULTS: UserProfile = {
-  displayName: 'Aman',
+  displayName: 'Aman'
 }
 
 // ─── Storage keys ───────────────────────────────────────────────────────────
 
 const THEME_KEY = 'editor-theme-settings'
 const PROFILE_KEY = 'user-profile'
+const APP_THEME_KEY = 'app-theme'
 
 // ─── Context ─────────────────────────────────────────────────────────────────
 
 interface AppSettingsContextValue {
+  // App theme
+  appTheme: string
+  setAppTheme: (themeId: string) => void
+  /** Ordered list of available theme IDs for the picker. */
+  availableThemes: string[]
   // Editor theme
   settings: EditorThemeSettings
   updateSetting: (key: keyof EditorThemeSettings, value: string) => void
@@ -86,15 +101,29 @@ interface AppSettingsContextValue {
 const AppSettingsContext = createContext<AppSettingsContextValue | null>(null)
 
 /**
+ * Read the stored app theme ID from localStorage.
+ * @returns The theme ID or the default.
+ */
+function loadAppTheme(): string {
+  try {
+    const raw = localStorage.getItem(APP_THEME_KEY)
+    if (raw && APP_THEMES[raw]) return raw
+  } catch { /* ignore */ }
+  return DEFAULT_THEME
+}
+
+/**
  * Read editor theme from localStorage or fall back to defaults.
+ * @param themeId The active app theme key.
  * @returns The editor theme settings.
  */
-function loadTheme(): EditorThemeSettings {
+function loadEditorTheme(themeId: string): EditorThemeSettings {
+  const defaults = editorDefaultsForTheme(themeId)
   try {
     const raw = localStorage.getItem(THEME_KEY)
-    if (raw) return { ...THEME_DEFAULTS, ...JSON.parse(raw) as Partial<EditorThemeSettings> }
+    if (raw) return { ...defaults, ...JSON.parse(raw) as Partial<EditorThemeSettings> }
   } catch { /* ignore */ }
-  return { ...THEME_DEFAULTS }
+  return { ...defaults }
 }
 
 /**
@@ -110,22 +139,12 @@ function loadProfile(): UserProfile {
 }
 
 /**
- * Apply all theme settings as CSS custom properties on :root.
+ * Apply editor-specific settings (icons, accent) as CSS custom
+ * properties on :root.
  * @param s The settings object.
  */
-function applyToDOM(s: EditorThemeSettings): void {
+function applyEditorToDOM(s: EditorThemeSettings): void {
   const root = document.documentElement
-  // Editor syntax
-  root.style.setProperty('--editor-h1', s.h1Color)
-  root.style.setProperty('--editor-h2', s.h2Color)
-  root.style.setProperty('--editor-h3', s.h3Color)
-  root.style.setProperty('--editor-h4', s.h4Color)
-  root.style.setProperty('--editor-h5', s.h5Color)
-  root.style.setProperty('--editor-h6', s.h6Color)
-  root.style.setProperty('--editor-bold', s.boldColor)
-  root.style.setProperty('--editor-italic', s.italicColor)
-  root.style.setProperty('--editor-link', s.linkColor)
-  root.style.setProperty('--editor-code', s.codeColor)
   // Icons
   root.style.setProperty('--icon-folder', s.folderColor)
   root.style.setProperty('--icon-diagram', s.diagramColor)
@@ -139,40 +158,66 @@ function applyToDOM(s: EditorThemeSettings): void {
 }
 
 /**
- * Provider that loads/saves all app settings (profile + editor theme)
- * and applies colours as CSS custom properties.
+ * Provider that loads/saves all app settings (app theme, editor theme,
+ * profile) and applies colours as CSS custom properties.
  * @param props Children.
  * @returns The provider element.
  */
 export function EditorThemeProvider({ children }: { children: ReactNode }): React.JSX.Element {
-  const [settings, setSettings] = useState<EditorThemeSettings>(loadTheme)
+  const [appTheme, setAppThemeState] = useState<string>(loadAppTheme)
+  const [settings, setSettings] = useState<EditorThemeSettings>(() => loadEditorTheme(loadAppTheme()))
   const [profile, setProfile] = useState<UserProfile>(loadProfile)
 
-  // Apply theme on mount and whenever settings change
+  // Apply the full app theme + editor settings on mount and whenever they change
   useEffect(() => {
-    applyToDOM(settings)
+    // 1. Apply app theme (backgrounds, borders, sidebar, primary, AND editor syntax)
+    applyAppTheme(appTheme)
+    // 2. Apply editor-only settings (icons, accent — may override theme defaults)
+    applyEditorToDOM(settings)
+    try { localStorage.setItem(APP_THEME_KEY, appTheme) } catch { /* ignore */ }
     try { localStorage.setItem(THEME_KEY, JSON.stringify(settings)) } catch { /* ignore */ }
-  }, [settings])
+  }, [appTheme, settings])
 
   // Persist profile changes
   useEffect(() => {
     try { localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)) } catch { /* ignore */ }
   }, [profile])
 
+  /** Switch the app theme and reset editor colours to that theme's defaults. */
+  const setAppTheme = useCallback((themeId: string) => {
+    if (!APP_THEMES[themeId]) return
+    setAppThemeState(themeId)
+    // Reset editor colours to the new theme's palette
+    setSettings(editorDefaultsForTheme(themeId))
+    // Clear stored overrides so the new theme's defaults take effect
+    try { localStorage.removeItem(THEME_KEY) } catch { /* ignore */ }
+  }, [])
+
   const updateSetting = useCallback((key: keyof EditorThemeSettings, value: string) => {
     setSettings((prev) => ({ ...prev, [key]: value }))
   }, [])
 
   const resetToDefaults = useCallback(() => {
-    setSettings({ ...THEME_DEFAULTS })
-  }, [])
+    setSettings(editorDefaultsForTheme(appTheme))
+  }, [appTheme])
 
   const updateProfile = useCallback((key: keyof UserProfile, value: string) => {
     setProfile((prev) => ({ ...prev, [key]: value }))
   }, [])
 
   return (
-    <AppSettingsContext.Provider value={{ settings, updateSetting, resetToDefaults, profile, updateProfile }}>
+    <AppSettingsContext.Provider
+      value={{
+        appTheme,
+        setAppTheme,
+        availableThemes: THEME_ORDER,
+        settings,
+        updateSetting,
+        resetToDefaults,
+        profile,
+        updateProfile
+      }}
+    >
       {children}
     </AppSettingsContext.Provider>
   )

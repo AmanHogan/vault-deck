@@ -133,6 +133,7 @@ interface DbApi {
     writeFile: (relPath: string, content: string) => Promise<void>
     createFile: (relPath: string, content?: string) => Promise<string>
     copyFile: (relPath: string) => Promise<string>
+    importExternalFile: (absolutePath: string, destRelDir: string) => Promise<string>
     deleteFile: (relPath: string) => Promise<void>
     renameFile: (oldPath: string, newPath: string) => Promise<string>
     createDirectory: (relPath: string) => Promise<void>

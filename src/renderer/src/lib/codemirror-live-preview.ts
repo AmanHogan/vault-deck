@@ -315,16 +315,30 @@ const livePreviewPlugin = ViewPlugin.fromClass(
  * font for body text and monospace only for inline code.
  */
 const livePreviewTheme = EditorView.theme({
+  '&': {
+    height: '100%'
+  },
+  '&.cm-focused': {
+    outline: 'none'
+  },
   '.cm-scroller': {
     fontFamily:
       '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
     fontSize: '16px',
-    lineHeight: '1.75'
+    lineHeight: '1.75',
+    overflow: 'auto'
   },
   '.cm-content': {
     maxWidth: '800px',
     margin: '0 auto',
-    padding: '24px 16px'
+    padding: '24px 16px',
+    caretColor: 'var(--foreground, #e4e4e7)'
+  },
+  '.cm-cursor': {
+    borderLeftColor: 'var(--foreground, #e4e4e7)'
+  },
+  '.cm-activeLine': {
+    backgroundColor: 'transparent'
   },
   '.cm-gutters': {
     display: 'none'

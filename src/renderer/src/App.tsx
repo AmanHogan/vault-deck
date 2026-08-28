@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from 'react'
+import { lazy, Suspense, useEffect, useCallback } from 'react'
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AppSidebar } from './components/app-sidebar'
 import { Toaster } from './components/ui/sonner'
@@ -50,7 +50,32 @@ function PaneSync(): null {
  * @returns The rendered layout.
  */
 function Layout({ children }: { children: React.ReactNode }): React.JSX.Element {
-  const { ready, vaultPath, openFilePath } = useVault()
+  const { ready, vaultPath, openFilePath, openFile } = useVault()
+
+  // Prevent Electron from navigating to dropped files. Instead, import
+  // external files into the vault root when dropped on the main area.
+  const handleGlobalDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+  }, [])
+
+  const handleGlobalDrop = useCallback(
+    async (e: React.DragEvent) => {
+      e.preventDefault()
+      if (!vaultPath || e.dataTransfer.files.length === 0) return
+      for (const file of Array.from(e.dataTransfer.files)) {
+        const absPath = (file as File & { path?: string }).path
+        if (!absPath) continue
+        try {
+          const actual = await window.api.vault.importExternalFile(absPath, '')
+          openFile(actual)
+        } catch (err) {
+          console.error('Failed to import external file:', err)
+        }
+      }
+    },
+    [vaultPath, openFile]
+  )
 
   // Still loading vault state — show nothing briefly
   if (!ready) {
@@ -79,7 +104,11 @@ function Layout({ children }: { children: React.ReactNode }): React.JSX.Element 
   return (
     <PaneLayoutProvider>
       <PaneSync />
-      <div className="flex h-screen w-full overflow-hidden">
+      <div
+        className="flex h-screen w-full overflow-hidden"
+        onDragOver={handleGlobalDragOver}
+        onDrop={(e) => void handleGlobalDrop(e)}
+      >
         <CommandPalette />
         <AppSidebar />
         <main className="flex min-w-0 flex-1 flex-col overflow-hidden">

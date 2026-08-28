@@ -158,6 +158,8 @@ const api = {
     createFile: (relPath: string, content?: string) =>
       ipcRenderer.invoke('vault:createFile', relPath, content) as Promise<string>,
     copyFile: (relPath: string) => ipcRenderer.invoke('vault:copyFile', relPath) as Promise<string>,
+    importExternalFile: (absolutePath: string, destRelDir: string) =>
+      ipcRenderer.invoke('vault:importExternalFile', absolutePath, destRelDir) as Promise<string>,
     deleteFile: (relPath: string) =>
       ipcRenderer.invoke('vault:deleteFile', relPath) as Promise<void>,
     renameFile: (oldPath: string, newPath: string) =>

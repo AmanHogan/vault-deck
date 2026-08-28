@@ -460,6 +460,34 @@ export const vault = {
   },
 
   /**
+   * Import an external file (from Finder, desktop, etc.) into the vault.
+   * Copies the file — the original is not modified.
+   * @param absolutePath The absolute path to the external file.
+   * @param destRelDir The vault-relative directory to place it in (empty string for root).
+   * @returns The vault-relative path of the imported file.
+   */
+  async importExternalFile(absolutePath: string, destRelDir: string): Promise<string> {
+    const vaultPath = currentVaultPath ?? getSetting('vaultPath')
+    if (!vaultPath) throw new Error('No vault open')
+    const name = basename(absolutePath)
+    const destDir = destRelDir
+      ? resolveVaultPath(vaultPath, destRelDir)
+      : vaultPath
+    await fs.promises.mkdir(destDir, { recursive: true })
+    // Avoid overwriting — append " (N)" if a file with the same name exists.
+    let destPath = join(destDir, name)
+    const ext = extname(name)
+    const base = basename(name, ext)
+    let i = 1
+    while (fs.existsSync(destPath)) {
+      destPath = join(destDir, `${base} (${i})${ext}`)
+      i++
+    }
+    await fs.promises.copyFile(absolutePath, destPath)
+    return relative(vaultPath, destPath).split(sep).join('/')
+  },
+
+  /**
    * Delete a file from the vault.
    * @param relPath The relative path of the file to delete.
    */

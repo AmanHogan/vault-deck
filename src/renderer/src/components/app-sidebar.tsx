@@ -33,6 +33,7 @@ import type { VaultEntry } from '@/types/types'
 import { SearchPanel } from '@/components/search-panel'
 import { useVault } from '@/lib/vault-context'
 import { useEditorTheme, type EditorThemeSettings } from '@/lib/editor-theme-context'
+import { APP_THEMES } from '@/lib/app-themes'
 import { cn } from '@/lib/utils'
 import {
   Tooltip,
@@ -204,7 +205,7 @@ const ICON_COLORS: ColorSetting[] = [
  * @returns The rendered settings panel.
  */
 function SettingsPanel(): React.JSX.Element {
-  const { settings, updateSetting, resetToDefaults, profile, updateProfile } = useEditorTheme()
+  const { settings, updateSetting, resetToDefaults, profile, updateProfile, appTheme, setAppTheme, availableThemes } = useEditorTheme()
 
   /** Handle a native colour-picker change. */
   const onColorChange = useCallback(
@@ -216,6 +217,44 @@ function SettingsPanel(): React.JSX.Element {
 
   return (
     <div className="flex flex-col gap-4 px-3 py-4 text-sm">
+      {/* ── App Theme ── */}
+      <div>
+        <p className="mb-2 font-semibold text-foreground">App Theme</p>
+        <div className="grid grid-cols-1 gap-1.5">
+          {availableThemes.map((id) => {
+            const theme = APP_THEMES[id]
+            if (!theme) return null
+            const isActive = id === appTheme
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setAppTheme(id)}
+                className={cn(
+                  'flex items-center gap-2.5 rounded-lg border px-2.5 py-2 text-left transition-colors',
+                  isActive
+                    ? 'border-primary bg-primary/10 text-foreground'
+                    : 'border-transparent hover:bg-accent/50 text-muted-foreground hover:text-foreground'
+                )}
+              >
+                {/* Colour swatch showing the theme's key colours */}
+                <div className="flex shrink-0 gap-0.5">
+                  <div className="h-4 w-4 rounded-sm" style={{ backgroundColor: theme.vars.background }} />
+                  <div className="h-4 w-4 rounded-sm" style={{ backgroundColor: theme.vars.primary }} />
+                  <div className="h-4 w-4 rounded-sm" style={{ backgroundColor: theme.editor.h2 }} />
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-medium">{theme.label}</p>
+                  <p className="truncate text-[10px] text-muted-foreground">{theme.description}</p>
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      <div className="border-t border-border" />
+
       {/* ── Profile ── */}
       <div>
         <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60">

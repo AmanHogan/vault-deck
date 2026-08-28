@@ -363,27 +363,29 @@ export default function VaultFilePage({
   // ── Text editor (MD, TXT, JSON, CSV, etc.) ──
   return (
     <div className="flex h-full flex-col">
-      {/* Toolbar row — filename on left, save on right */}
-      <div className="flex items-center gap-2 border-b border-border px-3 py-1">
-        <span className="truncate text-xs font-medium text-muted-foreground">{fileName}</span>
-        <div className="flex-1" />
+      {/* Toolbar row — only for non-markdown files (markdown uses live preview) */}
+      {!isMarkdown && (
+        <div className="flex items-center gap-2 border-b border-border px-3 py-1">
+          <span className="truncate text-xs font-medium text-muted-foreground">{fileName}</span>
+          <div className="flex-1" />
 
-        {dirty && (
-          <button
-            type="button"
-            className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
-            onClick={() => void save()}
-            disabled={saving}
-          >
-            <Save className="h-3 w-3" />
-            {saving ? 'Saving…' : 'Save'}
-          </button>
-        )}
-        {dirty && (
-          <span className="h-2 w-2 shrink-0 rounded-full bg-primary" title="Unsaved changes" />
-        )}
-        {saving && !dirty && <span className="text-xs text-muted-foreground">Saved</span>}
-      </div>
+          {dirty && (
+            <button
+              type="button"
+              className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+              onClick={() => void save()}
+              disabled={saving}
+            >
+              <Save className="h-3 w-3" />
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          )}
+          {dirty && (
+            <span className="h-2 w-2 shrink-0 rounded-full bg-primary" title="Unsaved changes" />
+          )}
+          {saving && !dirty && <span className="text-xs text-muted-foreground">Saved</span>}
+        </div>
+      )}
 
       {loaded ? (
         <Suspense fallback={<EditorFallback />}>

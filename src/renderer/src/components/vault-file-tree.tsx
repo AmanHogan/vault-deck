@@ -59,6 +59,30 @@ function initialContent(name: string): string | undefined {
   return undefined
 }
 
+/** Recursively collect all file names in the tree. */
+function collectAllNames(entries: VaultEntry[]): Set<string> {
+  const names = new Set<string>()
+  for (const e of entries) {
+    names.add(e.name)
+    if (e.children) for (const n of collectAllNames(e.children)) names.add(n)
+  }
+  return names
+}
+
+/**
+ * Generate the next "Untitled N" name with the given extension,
+ * skipping names already present in the tree.
+ * @param tree The vault file tree.
+ * @param ext The file extension including the dot, e.g. ".md".
+ * @returns The next available name, e.g. "Untitled 1.md".
+ */
+function nextAutoName(tree: VaultEntry[], ext: string): string {
+  const existing = collectAllNames(tree)
+  let n = 1
+  while (existing.has(`Untitled ${n}${ext}`)) n++
+  return `Untitled ${n}${ext}`
+}
+
 /** Extract just the filename from a path. */
 function fileName(path: string): string {
   return path.split('/').pop() ?? path
@@ -228,10 +252,9 @@ interface FileTreeNodeProps {
  * @returns The rendered tree node.
  */
 function FileTreeNode({ entry, depth }: FileTreeNodeProps): React.JSX.Element {
-  const { openFilePath, openFile, createFile, createDirectory, deleteFile, deleteDirectory, renameFile, copyFile, refreshTree } = useVault()
+  const { openFilePath, openFile, createFile, createDirectory, deleteFile, deleteDirectory, renameFile, copyFile, refreshTree, tree } = useVault()
   const { selected, toggleSelect, isSelected, expandedDirs, toggleExpanded, setExpanded: setDirExpanded } = useContext(TreeContext)
 
-  const [creatingFile, setCreatingFile] = useState<'file' | 'diagram' | 'deck' | null>(null)
   const [creatingFolder, setCreatingFolder] = useState(false)
   const [renaming, setRenaming] = useState(false)
   const [dragOver, setDragOver] = useState(false)
@@ -263,6 +286,25 @@ function FileTreeNode({ entry, depth }: FileTreeNodeProps): React.JSX.Element {
   const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault()
     setDragOver(false)
+
+    // ── External files (dragged from Finder / desktop) ──
+    if (e.dataTransfer.files.length > 0) {
+      for (const file of Array.from(e.dataTransfer.files)) {
+        // Electron gives us the absolute path via .path
+        const absPath = (file as File & { path?: string }).path
+        if (!absPath) continue
+        try {
+          const actual = await window.api.vault.importExternalFile(absPath, entry.path)
+          openFile(actual)
+        } catch (err) {
+          console.error('Failed to import external file:', err)
+        }
+      }
+      setDirExpanded(entry.path, true)
+      return
+    }
+
+    // ── Internal move (within the vault tree) ──
     const sourcePath = e.dataTransfer.getData('text/plain')
     if (!sourcePath || sourcePath === entry.path) return
     if (entry.path.startsWith(sourcePath + '/')) return
@@ -273,7 +315,7 @@ function FileTreeNode({ entry, depth }: FileTreeNodeProps): React.JSX.Element {
       await renameFile(sourcePath, newPath)
       setDirExpanded(entry.path, true)
     } catch { /* move failed */ }
-  }, [entry.path, renameFile, setDirExpanded])
+  }, [entry.path, renameFile, setDirExpanded, openFile])
 
   /** Delete all selected files. */
   const deleteSelected = useCallback(async () => {
@@ -336,13 +378,25 @@ function FileTreeNode({ entry, depth }: FileTreeNodeProps): React.JSX.Element {
 
           <ContextMenuPrimitive.Portal>
             <ContextMenuPrimitive.Content className="z-50 min-w-48 rounded-md border bg-popover p-1 text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95">
-              <ContextMenuPrimitive.Item className={ctxItemClass} onClick={() => { setCreatingFile('file'); setDirExpanded(entry.path, true) }}>
-                <FileText className="h-4 w-4" /> New file
+              <ContextMenuPrimitive.Item className={ctxItemClass} onClick={() => {
+                setDirExpanded(entry.path, true)
+                const name = nextAutoName(tree, '.md')
+                void createFile(`${entry.path}/${name}`).then((actual) => openFile(actual))
+              }}>
+                <FileText className="h-4 w-4" /> New note
               </ContextMenuPrimitive.Item>
-              <ContextMenuPrimitive.Item className={ctxItemClass} onClick={() => { setCreatingFile('diagram'); setDirExpanded(entry.path, true) }}>
+              <ContextMenuPrimitive.Item className={ctxItemClass} onClick={() => {
+                setDirExpanded(entry.path, true)
+                const name = nextAutoName(tree, '.diagram')
+                void createFile(`${entry.path}/${name}`, initialContent(name)).then((actual) => openFile(actual))
+              }}>
                 <Network className="h-4 w-4" /> New diagram
               </ContextMenuPrimitive.Item>
-              <ContextMenuPrimitive.Item className={ctxItemClass} onClick={() => { setCreatingFile('deck'); setDirExpanded(entry.path, true) }}>
+              <ContextMenuPrimitive.Item className={ctxItemClass} onClick={() => {
+                setDirExpanded(entry.path, true)
+                const name = nextAutoName(tree, '.deck')
+                void createFile(`${entry.path}/${name}`, initialContent(name)).then((actual) => openFile(actual))
+              }}>
                 <Layers className="h-4 w-4" /> New deck
               </ContextMenuPrimitive.Item>
               <ContextMenuPrimitive.Item className={ctxItemClass} onClick={() => { setCreatingFolder(true); setDirExpanded(entry.path, true) }}>
@@ -363,25 +417,6 @@ function FileTreeNode({ entry, depth }: FileTreeNodeProps): React.JSX.Element {
             </ContextMenuPrimitive.Content>
           </ContextMenuPrimitive.Portal>
         </ContextMenuPrimitive.Root>
-
-        {creatingFile && (
-          <div style={{ paddingLeft: `${(depth + 1) * 12 + 4}px` }}>
-            <InlineNameInput
-              placeholder={creatingFile === 'diagram' ? 'diagram.diagram' : creatingFile === 'deck' ? 'flashcards.deck' : 'note.md'}
-              onCommit={async (name) => {
-                const kind = creatingFile
-                setCreatingFile(null)
-                let finalName = name
-                if (kind === 'diagram' && !name.endsWith('.diagram')) finalName = name + '.diagram'
-                if (kind === 'deck' && !name.endsWith('.deck')) finalName = name + '.deck'
-                const path = `${entry.path}/${finalName}`
-                const actual = await createFile(path, initialContent(finalName))
-                openFile(actual)
-              }}
-              onCancel={() => setCreatingFile(null)}
-            />
-          </div>
-        )}
 
         {creatingFolder && (
           <div style={{ paddingLeft: `${(depth + 1) * 12 + 4}px` }}>
@@ -519,7 +554,7 @@ function ToolbarButton({
 
 // ─── Main file tree ─────────────────────────────────────────────────────────
 
-type RootCreate = 'file' | 'diagram' | 'deck' | 'folder' | null
+type RootCreate = 'folder' | null
 
 /**
  * The vault file tree panel. Shows the full tree with an icon toolbar
@@ -610,17 +645,27 @@ export function VaultFileTree(): React.JSX.Element | null {
 
   if (!vaultPath) return null
 
-  const placeholder: Record<Exclude<RootCreate, null>, string> = {
-    file: 'note.md',
-    diagram: 'diagram.diagram',
-    deck: 'flashcards.deck',
-    folder: 'folder name',
-  }
-
-  /** Handle drop at the vault root level — moves item to root. */
+  /** Handle drop at the vault root level — moves item to root or imports external files. */
   const handleRootDrop = async (e: React.DragEvent): Promise<void> => {
     e.preventDefault()
     setRootDragOver(false)
+
+    // ── External files (dragged from Finder / desktop) ──
+    if (e.dataTransfer.files.length > 0) {
+      for (const file of Array.from(e.dataTransfer.files)) {
+        const absPath = (file as File & { path?: string }).path
+        if (!absPath) continue
+        try {
+          const actual = await window.api.vault.importExternalFile(absPath, '')
+          openFile(actual)
+        } catch (err) {
+          console.error('Failed to import external file:', err)
+        }
+      }
+      return
+    }
+
+    // ── Internal move to root ──
     const sourcePath = e.dataTransfer.getData('text/plain')
     if (!sourcePath) return
     const name = sourcePath.split('/').pop() ?? sourcePath
@@ -643,9 +688,18 @@ export function VaultFileTree(): React.JSX.Element | null {
       >
         {/* Icon toolbar */}
         <div className="mb-1 flex items-center justify-end gap-0.5 px-2">
-          <ToolbarButton icon={FilePlus} label="New file" onClick={() => setCreating('file')} />
-          <ToolbarButton icon={Network} label="New diagram" onClick={() => setCreating('diagram')} />
-          <ToolbarButton icon={Layers} label="New deck" onClick={() => setCreating('deck')} />
+          <ToolbarButton icon={FilePlus} label="New note" onClick={() => {
+            const name = nextAutoName(tree, '.md')
+            void createFile(name).then((actual) => openFile(actual))
+          }} />
+          <ToolbarButton icon={Network} label="New diagram" onClick={() => {
+            const name = nextAutoName(tree, '.diagram')
+            void createFile(name, initialContent(name)).then((actual) => openFile(actual))
+          }} />
+          <ToolbarButton icon={Layers} label="New deck" onClick={() => {
+            const name = nextAutoName(tree, '.deck')
+            void createFile(name, initialContent(name)).then((actual) => openFile(actual))
+          }} />
           <ToolbarButton icon={FolderPlus} label="New folder" onClick={() => setCreating('folder')} />
           <ToolbarButton icon={ChevronsDownUp} label="Collapse all" onClick={collapseAll} />
         </div>
@@ -665,21 +719,12 @@ export function VaultFileTree(): React.JSX.Element | null {
           </div>
         )}
 
-        {creating && (
+        {creating === 'folder' && (
           <InlineNameInput
-            placeholder={placeholder[creating]}
+            placeholder="folder name"
             onCommit={async (name) => {
-              const kind = creating
               setCreating(null)
-              if (kind === 'folder') {
-                await createDirectory(name)
-              } else {
-                let finalName = name
-                if (kind === 'diagram' && !name.endsWith('.diagram')) finalName = name + '.diagram'
-                if (kind === 'deck' && !name.endsWith('.deck')) finalName = name + '.deck'
-                const actual = await createFile(finalName, initialContent(finalName))
-                openFile(actual)
-              }
+              await createDirectory(name)
             }}
             onCancel={() => setCreating(null)}
           />

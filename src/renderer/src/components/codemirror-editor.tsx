@@ -180,9 +180,6 @@ function buildExtensions(
   useLivePreview: boolean
 ): Extension[] {
   const base: Extension[] = [
-    highlightActiveLine(),
-    drawSelection(),
-    rectangularSelection(),
     indentOnInput(),
     bracketMatching(),
     closeBrackets(),
@@ -222,11 +219,19 @@ function buildExtensions(
   ]
 
   if (useLivePreview) {
-    // Obsidian-style: proportional font, no line numbers, inline rendering
+    // Obsidian-style: proportional font, no line numbers, just blinking cursor
     base.push(...livePreviewExt)
   } else {
     // Source mode: monospace, line numbers, code-editor look
-    base.push(editorTheme, lineNumbers(), highlightActiveLineGutter(), foldGutter())
+    base.push(
+      editorTheme,
+      highlightActiveLine(),
+      drawSelection(),
+      rectangularSelection(),
+      lineNumbers(),
+      highlightActiveLineGutter(),
+      foldGutter()
+    )
   }
 
   return base
@@ -403,26 +408,28 @@ export function CodeMirrorEditor({ value, onChange, onSave, className, livePrevi
 
   return (
     <div className={className} style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      {/* Formatting toolbar */}
-      <div className="flex items-center gap-0.5 border-b border-border bg-card/50 px-2 py-1 flex-shrink-0 overflow-x-auto">
-        {TOOLBAR_ACTIONS.map(({ label, icon: Icon, action }, i) => {
-          // Add visual separators between groups
-          const showSep = i === 4 || i === 7 || i === 10
-          return (
-            <span key={label} className="contents">
-              {showSep && <span className="mx-1 h-5 w-px bg-border/60" />}
-              <button
-                type="button"
-                title={label}
-                onClick={() => runAction(action)}
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              >
-                <Icon className="h-3.5 w-3.5" />
-              </button>
-            </span>
-          )
-        })}
-      </div>
+      {/* Formatting toolbar — hidden in live preview mode */}
+      {!livePreview && (
+        <div className="flex items-center gap-0.5 border-b border-border bg-card/50 px-2 py-1 flex-shrink-0 overflow-x-auto">
+          {TOOLBAR_ACTIONS.map(({ label, icon: Icon, action }, i) => {
+            // Add visual separators between groups
+            const showSep = i === 4 || i === 7 || i === 10
+            return (
+              <span key={label} className="contents">
+                {showSep && <span className="mx-1 h-5 w-px bg-border/60" />}
+                <button
+                  type="button"
+                  title={label}
+                  onClick={() => runAction(action)}
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                </button>
+              </span>
+            )
+          })}
+        </div>
+      )}
 
       {/* Editor */}
       <div
