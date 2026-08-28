@@ -141,8 +141,12 @@ export default function VaultFilePage({
           // drawing data and should be rendered with the Excalidraw editor
           // instead of CodeMirror. Check by content AND by filename pattern
           // (*.excalidraw.md) for maximum compatibility.
-          if (isMarkdown && (isObsidianExcalidraw(text) || isExcalidrawFilename(openFilePath))) {
+          const isExContent = isObsidianExcalidraw(text)
+          const isExFilename = isExcalidrawFilename(openFilePath)
+          console.log('[VaultFilePage] excalidraw check:', { isMarkdown, isExContent, isExFilename, openFilePath, textLen: text.length })
+          if (isMarkdown && (isExContent || isExFilename)) {
             const parsed = parseObsidianExcalidraw(text)
+            console.log('[VaultFilePage] parseObsidianExcalidraw result:', parsed ? 'OK' : 'null')
             if (parsed) {
               setObsidianExcalidrawData(parsed)
             }

@@ -30,21 +30,34 @@ export function isExcalidrawFilename(filePath: string): boolean {
  */
 export function isObsidianExcalidraw(content: string): boolean {
   // Quick bail-out: must mention excalidraw somewhere
-  if (!content.includes('excalidraw')) return false
+  if (!content.includes('excalidraw')) {
+    console.log('[excalidraw] isObsidianExcalidraw: no "excalidraw" substring found')
+    return false
+  }
 
   // Strategy 1: check YAML frontmatter for excalidraw-plugin key (any value)
   // Handle both \n and \r\n line endings
   const fmMatch = content.match(/^---[ \t]*\r?\n([\s\S]*?)\r?\n---/)
-  if (fmMatch && /excalidraw-plugin\s*:/.test(fmMatch[1])) return true
+  if (fmMatch && /excalidraw-plugin\s*:/.test(fmMatch[1])) {
+    console.log('[excalidraw] isObsidianExcalidraw: detected via frontmatter')
+    return true
+  }
 
   // Strategy 2: presence of the compressed-json code fence
-  if (/```compressed-json/i.test(content)) return true
+  if (/```compressed-json/i.test(content)) {
+    console.log('[excalidraw] isObsidianExcalidraw: detected via compressed-json fence')
+    return true
+  }
 
   // Strategy 3: the %% Drawing comment block that wraps the data
   if (/^%%\s*\r?\n/.test(content) || /\n%%\s*\r?\n/.test(content)) {
-    if (content.includes('Drawing')) return true
+    if (content.includes('Drawing')) {
+      console.log('[excalidraw] isObsidianExcalidraw: detected via %% Drawing block')
+      return true
+    }
   }
 
+  console.log('[excalidraw] isObsidianExcalidraw: no match (has "excalidraw" but no pattern matched)')
   return false
 }
 
@@ -61,15 +74,23 @@ export function parseObsidianExcalidraw(content: string): Record<string, unknown
   // Try compressed-json code block first (most common modern format)
   const compressedMatch = text.match(/```compressed-json\s*\n([\s\S]*?)\n\s*```/)
   if (compressedMatch) {
-    const compressed = compressedMatch[1].trim()
+    // Strip ALL whitespace — the base64 payload may wrap across multiple
+    // lines and lz-string's decompressFromBase64 cannot handle embedded
+    // newlines or spaces.
+    const compressed = compressedMatch[1].replace(/\s/g, '')
+    console.log('[excalidraw] compressed-json block found, length:', compressed.length)
     try {
       const decompressed = decompressFromBase64(compressed)
       if (decompressed) {
+        console.log('[excalidraw] decompressed OK, length:', decompressed.length)
         return JSON.parse(decompressed) as Record<string, unknown>
       }
+      console.warn('[excalidraw] decompressFromBase64 returned null')
     } catch (err) {
-      console.error('Failed to decompress Obsidian Excalidraw data:', err)
+      console.error('[excalidraw] Failed to decompress/parse:', err)
     }
+  } else {
+    console.log('[excalidraw] no compressed-json block found')
   }
 
   // Try raw JSON code block (older format without compression)
@@ -92,7 +113,7 @@ export function parseObsidianExcalidraw(content: string): Record<string, unknown
     const innerCompressed = inner.match(/```compressed-json\s*\n([\s\S]*?)\n\s*```/)
     if (innerCompressed) {
       try {
-        const decompressed = decompressFromBase64(innerCompressed[1].trim())
+        const decompressed = decompressFromBase64(innerCompressed[1].replace(/\s/g, ''))
         if (decompressed) {
           return JSON.parse(decompressed) as Record<string, unknown>
         }
