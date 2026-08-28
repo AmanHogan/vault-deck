@@ -31,7 +31,9 @@ settingsDb.exec(`
  * @returns The setting value, or null if not set.
  */
 function getSetting(key: string): string | null {
-  const row = settingsDb.prepare('SELECT value FROM app_settings WHERE key=?').get(key) as { value: string } | undefined
+  const row = settingsDb.prepare('SELECT value FROM app_settings WHERE key=?').get(key) as
+    | { value: string }
+    | undefined
   return row?.value ?? null
 }
 
@@ -41,9 +43,11 @@ function getSetting(key: string): string | null {
  * @param value The setting value.
  */
 function setSetting(key: string, value: string): void {
-  settingsDb.prepare(
-    'INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value'
-  ).run(key, value)
+  settingsDb
+    .prepare(
+      'INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value'
+    )
+    .run(key, value)
 }
 
 // ─── File-tree types ────────────────────────────────────────────────────────
@@ -65,9 +69,75 @@ const WORKSPACE_EXTENSIONS = new Set(['.md', '.diagram', '.deck', '.excalidraw',
 /** Extensions to show in the file tree (workspace files + common media) */
 const VISIBLE_EXTENSIONS = new Set([
   ...WORKSPACE_EXTENSIONS,
-  '.pdf', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp',
-  '.pptx', '.docx', '.xlsx',
-  '.json', '.csv',
+  '.pdf',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.svg',
+  '.webp',
+  '.pptx',
+  '.docx',
+  '.xlsx',
+  '.json',
+  '.csv'
+])
+
+/** Maximum text file size we'll load into the renderer (5 MB). */
+const MAX_TEXT_FILE_SIZE = 5 * 1024 * 1024
+
+/** Extensions that are always binary — never read as UTF-8 text. */
+const BINARY_EXTENSIONS = new Set([
+  '.zip',
+  '.tar',
+  '.gz',
+  '.bz2',
+  '.xz',
+  '.7z',
+  '.rar',
+  '.exe',
+  '.dll',
+  '.so',
+  '.dylib',
+  '.node',
+  '.wasm',
+  '.class',
+  '.jar',
+  '.war',
+  '.ear',
+  '.pyc',
+  '.pyo',
+  '.o',
+  '.a',
+  '.lib',
+  '.obj',
+  '.bin',
+  '.dat',
+  '.db',
+  '.sqlite',
+  '.sqlite3',
+  '.iso',
+  '.dmg',
+  '.img',
+  '.mp3',
+  '.mp4',
+  '.m4a',
+  '.m4v',
+  '.avi',
+  '.mov',
+  '.mkv',
+  '.flv',
+  '.wmv',
+  '.wav',
+  '.flac',
+  '.ogg',
+  '.aac',
+  '.wma',
+  '.ttf',
+  '.otf',
+  '.woff',
+  '.woff2',
+  '.eot'
 ])
 
 // ─── Watcher state ──────────────────────────────────────────────────────────
@@ -77,15 +147,17 @@ let currentVaultPath: string | null = null
 
 /**
  * Recursively read a directory into a sorted VaultEntry tree.
- * Hidden files/folders (starting with .) and node_modules are excluded.
+ * Uses async I/O to avoid blocking the main process on slow drives
+ * (OneDrive, network mounts). Hidden files/folders and node_modules
+ * are excluded; only files with recognised extensions are included.
  * @param dirPath The absolute directory path.
  * @param vaultRoot The vault root for computing relative paths.
  * @returns The sorted tree of entries.
  */
-function readDirTree(dirPath: string, vaultRoot: string): VaultEntry[] {
+async function readDirTreeAsync(dirPath: string, vaultRoot: string): Promise<VaultEntry[]> {
   let entries: fs.Dirent[]
   try {
-    entries = fs.readdirSync(dirPath, { withFileTypes: true })
+    entries = await fs.promises.readdir(dirPath, { withFileTypes: true })
   } catch {
     return []
   }
@@ -101,35 +173,40 @@ function readDirTree(dirPath: string, vaultRoot: string): VaultEntry[] {
 
     // On Windows + OneDrive, cloud-only placeholders are reparse points
     // that return false for both isFile() and isDirectory(). Fall back to
-    // fs.statSync to resolve the real type.
+    // fs.stat (async) to resolve the real type.
     let isDir = entry.isDirectory()
     let isFile = entry.isFile()
     if (!isDir && !isFile) {
       try {
-        const stat = fs.statSync(fullPath)
+        const stat = await fs.promises.stat(fullPath)
         isDir = stat.isDirectory()
         isFile = stat.isFile()
-      } catch { /* skip unreadable entries */ continue }
+      } catch {
+        /* skip unreadable entries */ continue
+      }
     }
 
     if (isDir) {
-      const children = readDirTree(fullPath, vaultRoot)
+      const children = await readDirTreeAsync(fullPath, vaultRoot)
       // Include directory even if empty (user may want to add files)
       result.push({
         path: relPath,
         name: entry.name,
         type: 'directory',
         extension: '',
-        children,
+        children
       })
     } else if (isFile) {
       const ext = extname(entry.name).toLowerCase()
-      // Show all files — the tree is a real file explorer
+      // Only include files the app can preview or edit — skip binaries
+      // like .zip, .exe, .dll, etc. that would just render as garbled text.
+      // Files with no extension (README, Makefile) are still shown.
+      if (ext !== '' && !VISIBLE_EXTENSIONS.has(ext)) continue
       result.push({
         path: relPath,
         name: entry.name,
         type: 'file',
-        extension: ext,
+        extension: ext
       })
     }
   }
@@ -145,13 +222,16 @@ function readDirTree(dirPath: string, vaultRoot: string): VaultEntry[] {
 
 /**
  * Send a 'vault:tree-changed' event with the fresh tree to all windows.
+ * Uses async tree reading to avoid blocking the main process.
  */
 function broadcastTreeChange(): void {
   if (!currentVaultPath) return
-  const tree = readDirTree(currentVaultPath, currentVaultPath)
-  for (const win of BrowserWindow.getAllWindows()) {
-    win.webContents.send('vault:tree-changed', tree)
-  }
+  const vaultPath = currentVaultPath
+  void readDirTreeAsync(vaultPath, vaultPath).then((tree) => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.webContents.send('vault:tree-changed', tree)
+    }
+  })
 }
 
 /**
@@ -171,14 +251,26 @@ function startWatcher(vaultPath: string): void {
 
   watcher = watch(vaultPath, {
     ignoreInitial: true,
-    ignored: [/(^|[/\\])\../, /node_modules/],
+    ignored: [
+      /(^|[/\\])\../, // hidden files/dirs
+      /node_modules/, // node_modules
+      // Skip files with unsupported extensions so changes to .zip/.exe/etc.
+      // never fire events, never trigger tree rebuilds, and don't consume
+      // OS file-handle slots on Windows. Paths without an extension are
+      // kept (they're likely directories or extensionless text files).
+      (filePath: string) => {
+        const ext = extname(filePath).toLowerCase()
+        if (ext === '') return false // allow dirs + extensionless files
+        return !VISIBLE_EXTENSIONS.has(ext)
+      }
+    ],
     persistent: true,
     depth: 10,
     // Disable polling — use native OS events (faster, less CPU).
     // chokidar v5 defaults to native watchers but explicit is safer.
     usePolling: false,
     // Wait for writes to finish before firing (helps with OneDrive/Dropbox)
-    awaitWriteFinish: { stabilityThreshold: 300, pollInterval: 100 },
+    awaitWriteFinish: { stabilityThreshold: 300, pollInterval: 100 }
   })
 
   watcher.on('add', debouncedBroadcast)
@@ -233,20 +325,21 @@ export const vault = {
   async pickVaultFolder(): Promise<string | null> {
     const result = await dialog.showOpenDialog({
       properties: ['openDirectory', 'createDirectory'],
-      title: 'Choose vault folder',
+      title: 'Choose vault folder'
     })
     if (result.canceled || !result.filePaths[0]) return null
     return result.filePaths[0]
   },
 
   /**
-   * Read the full file tree of the current vault.
+   * Read the full file tree of the current vault (async to avoid
+   * blocking the main process on slow drives).
    * @returns The tree, or an empty array if no vault is open.
    */
-  getTree(): VaultEntry[] {
+  async getTree(): Promise<VaultEntry[]> {
     const vaultPath = currentVaultPath ?? getSetting('vaultPath')
     if (!vaultPath) return []
-    return readDirTree(vaultPath, vaultPath)
+    return readDirTreeAsync(vaultPath, vaultPath)
   },
 
   /**
@@ -263,6 +356,8 @@ export const vault = {
 
   /**
    * Read a file's content from the vault by its relative path.
+   * Refuses to read files larger than MAX_TEXT_FILE_SIZE or files
+   * that appear to be binary.
    * @param relPath The file path relative to vault root (/ separators).
    * @returns The file contents as a UTF-8 string.
    */
@@ -270,6 +365,21 @@ export const vault = {
     const vaultPath = currentVaultPath ?? getSetting('vaultPath')
     if (!vaultPath) throw new Error('No vault open')
     const safePath = resolveVaultPath(vaultPath, relPath)
+
+    // Size guard — don't load huge files into the renderer
+    const stat = await fs.promises.stat(safePath)
+    if (stat.size > MAX_TEXT_FILE_SIZE) {
+      throw new Error(
+        `File too large to edit (${(stat.size / 1024 / 1024).toFixed(1)} MB). Maximum is ${MAX_TEXT_FILE_SIZE / 1024 / 1024} MB.`
+      )
+    }
+
+    // Binary guard — check the extension against known binary types
+    const ext = extname(safePath).toLowerCase()
+    if (BINARY_EXTENSIONS.has(ext)) {
+      throw new Error('Binary file — cannot open as text.')
+    }
+
     return fs.promises.readFile(safePath, 'utf-8')
   },
 
@@ -422,9 +532,13 @@ export const vault = {
     const q = query.toLowerCase()
     const results: SearchResult[] = []
 
-    function walk(dir: string): void {
+    async function walk(dir: string): Promise<void> {
       let entries: fs.Dirent[]
-      try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return }
+      try {
+        entries = await fs.promises.readdir(dir, { withFileTypes: true })
+      } catch {
+        return
+      }
       for (const entry of entries) {
         if (results.length >= limit) return
         if (entry.name.startsWith('.') || entry.name === 'node_modules') continue
@@ -435,7 +549,7 @@ export const vault = {
           if (entry.name.toLowerCase().includes(q)) {
             results.push({ path: rel, name: entry.name, type: 'directory', snippet: '' })
           }
-          walk(full)
+          await walk(full)
         } else if (entry.isFile()) {
           const ext = extname(entry.name).toLowerCase()
           if (!VISIBLE_EXTENSIONS.has(ext) && ext !== '') continue
@@ -444,37 +558,19 @@ export const vault = {
           // Try content search for text-based files
           if (SEARCHABLE_EXTENSIONS.has(ext)) {
             try {
-              const content = fs.readFileSync(full, 'utf-8')
-              if (ext === '.deck') {
-                const snippet = searchDeckContent(content, q)
-                if (nameMatch || snippet) {
-                  results.push({ path: rel, name: entry.name, type: 'deck', snippet: snippet ?? '' })
-                }
-              } else if (ext === '.diagram') {
-                const snippet = searchDiagramContent(content, q)
-                if (nameMatch || snippet) {
-                  results.push({ path: rel, name: entry.name, type: 'diagram', snippet: snippet ?? '' })
-                }
-              } else if (ext === '.excalidraw') {
-                // Excalidraw files are JSON — search element text values
-                const snippet = searchExcalidrawContent(content, q)
-                if (nameMatch || snippet) {
-                  results.push({ path: rel, name: entry.name, type: 'excalidraw', snippet: snippet ?? '' })
-                }
-              } else if (ext === '.canvas') {
-                // Canvas files are JSON — search text node content and group labels
-                const snippet = searchCanvasContent(content, q)
-                if (nameMatch || snippet) {
-                  results.push({ path: rel, name: entry.name, type: 'canvas', snippet: snippet ?? '' })
-                }
-              } else {
-                const snippet = searchTextContent(content, q)
-                if (nameMatch || snippet) {
-                  results.push({ path: rel, name: entry.name, type: 'file', snippet: snippet ?? '' })
-                }
+              const content = await fs.promises.readFile(full, 'utf-8')
+              const snippet = searchFileContent(ext, content, q)
+              if (nameMatch || snippet) {
+                results.push({
+                  path: rel,
+                  name: entry.name,
+                  type: fileTypeForExt(ext),
+                  snippet: snippet ?? ''
+                })
               }
             } catch {
-              if (nameMatch) results.push({ path: rel, name: entry.name, type: 'file', snippet: '' })
+              if (nameMatch)
+                results.push({ path: rel, name: entry.name, type: 'file', snippet: '' })
             }
           } else if (nameMatch) {
             results.push({ path: rel, name: entry.name, type: 'file', snippet: '' })
@@ -483,7 +579,7 @@ export const vault = {
       }
     }
 
-    walk(vaultPath)
+    await walk(vaultPath)
     return results
   },
 
@@ -496,17 +592,24 @@ export const vault = {
     if (!vaultPath) return []
     const tagMap = new Map<string, string[]>()
 
-    function walk(dir: string): void {
+    async function walk(dir: string): Promise<void> {
       let entries: fs.Dirent[]
-      try { entries = fs.readdirSync(dir, { withFileTypes: true }) } catch { return }
+      try {
+        entries = await fs.promises.readdir(dir, { withFileTypes: true })
+      } catch {
+        return
+      }
       for (const entry of entries) {
         if (entry.name.startsWith('.') || entry.name === 'node_modules') continue
         const full = join(dir, entry.name)
-        if (entry.isDirectory()) { walk(full); continue }
+        if (entry.isDirectory()) {
+          await walk(full)
+          continue
+        }
         const ext = extname(entry.name).toLowerCase()
         if (!SEARCHABLE_EXTENSIONS.has(ext)) continue
         try {
-          const content = fs.readFileSync(full, 'utf-8')
+          const content = await fs.promises.readFile(full, 'utf-8')
           const rel = relative(vaultPath!, full).split(sep).join('/')
           const tags = extractTags(content)
           for (const tag of tags) {
@@ -514,11 +617,13 @@ export const vault = {
             if (!files.includes(rel)) files.push(rel)
             tagMap.set(tag, files)
           }
-        } catch { /* skip unreadable files */ }
+        } catch {
+          /* skip unreadable files */
+        }
       }
     }
 
-    walk(vaultPath)
+    await walk(vaultPath)
     return Array.from(tagMap.entries())
       .map(([tag, files]) => ({ tag, files, count: files.length }))
       .sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag))
@@ -529,7 +634,7 @@ export const vault = {
    */
   dispose(): void {
     stopWatcher()
-  },
+  }
 }
 
 // ─── Search types & helpers ──────────────────────────────────────────────────
@@ -548,7 +653,16 @@ export interface TagInfo {
 }
 
 /** Extensions whose content we read for search / tag extraction. */
-const SEARCHABLE_EXTENSIONS = new Set(['.md', '.txt', '.deck', '.diagram', '.excalidraw', '.canvas', '.json', '.csv'])
+const SEARCHABLE_EXTENSIONS = new Set([
+  '.md',
+  '.txt',
+  '.deck',
+  '.diagram',
+  '.excalidraw',
+  '.canvas',
+  '.json',
+  '.csv'
+])
 
 /** Extract a snippet of surrounding text around the first match. */
 function searchTextContent(content: string, query: string): string | null {
@@ -566,15 +680,21 @@ function searchTextContent(content: string, query: string): string | null {
 /** Search inside a .deck JSON file's cards for matching terms/definitions. */
 function searchDeckContent(content: string, query: string): string | null {
   try {
-    const deck = JSON.parse(content) as { title?: string; cards?: { term?: string; definition?: string }[] }
+    const deck = JSON.parse(content) as {
+      title?: string
+      cards?: { term?: string; definition?: string }[]
+    }
     // Check title
     if (deck.title?.toLowerCase().includes(query)) return `Deck: ${deck.title}`
     // Check cards
     for (const card of deck.cards ?? []) {
       if (card.term?.toLowerCase().includes(query)) return `Card term: ${card.term.slice(0, 80)}`
-      if (card.definition?.toLowerCase().includes(query)) return `Card def: ${card.definition.slice(0, 80)}`
+      if (card.definition?.toLowerCase().includes(query))
+        return `Card def: ${card.definition.slice(0, 80)}`
     }
-  } catch { /* not valid JSON */ }
+  } catch {
+    /* not valid JSON */
+  }
   // Fallback to plain text search
   return searchTextContent(content, query)
 }
@@ -582,12 +702,17 @@ function searchDeckContent(content: string, query: string): string | null {
 /** Search inside a .diagram JSON file's nodes for matching labels. */
 function searchDiagramContent(content: string, query: string): string | null {
   try {
-    const diagram = JSON.parse(content) as { nodes?: { data?: { label?: string; description?: string } }[] }
+    const diagram = JSON.parse(content) as {
+      nodes?: { data?: { label?: string; description?: string } }[]
+    }
     for (const node of diagram.nodes ?? []) {
       if (node.data?.label?.toLowerCase().includes(query)) return `Node: ${node.data.label}`
-      if (node.data?.description?.toLowerCase().includes(query)) return `Node desc: ${node.data.description.slice(0, 80)}`
+      if (node.data?.description?.toLowerCase().includes(query))
+        return `Node desc: ${node.data.description.slice(0, 80)}`
     }
-  } catch { /* not valid JSON */ }
+  } catch {
+    /* not valid JSON */
+  }
   return searchTextContent(content, query)
 }
 
@@ -600,22 +725,73 @@ function searchExcalidrawContent(content: string, query: string): string | null 
         return `Text: ${el.text.slice(0, 80)}`
       }
     }
-  } catch { /* not valid JSON */ }
+  } catch {
+    /* not valid JSON */
+  }
   return searchTextContent(content, query)
 }
 
 /** Search inside a .canvas JSON file's nodes for matching text/labels. */
 function searchCanvasContent(content: string, query: string): string | null {
   try {
-    const data = JSON.parse(content) as { nodes?: { type?: string; text?: string; label?: string; file?: string; url?: string }[] }
+    const data = JSON.parse(content) as {
+      nodes?: { type?: string; text?: string; label?: string; file?: string; url?: string }[]
+    }
     for (const node of data.nodes ?? []) {
-      if (node.text && node.text.toLowerCase().includes(query)) return `Card: ${node.text.slice(0, 80)}`
+      if (node.text && node.text.toLowerCase().includes(query))
+        return `Card: ${node.text.slice(0, 80)}`
       if (node.label && node.label.toLowerCase().includes(query)) return `Group: ${node.label}`
       if (node.file && node.file.toLowerCase().includes(query)) return `File: ${node.file}`
-      if (node.url && node.url.toLowerCase().includes(query)) return `Link: ${node.url.slice(0, 80)}`
+      if (node.url && node.url.toLowerCase().includes(query))
+        return `Link: ${node.url.slice(0, 80)}`
     }
-  } catch { /* not valid JSON */ }
+  } catch {
+    /* not valid JSON */
+  }
   return searchTextContent(content, query)
+}
+
+/**
+ * Map a file extension to its SearchResult type.
+ * @param ext The lowercase extension (e.g. ".deck").
+ * @returns The result type string.
+ */
+function fileTypeForExt(ext: string): SearchResult['type'] {
+  switch (ext) {
+    case '.deck':
+      return 'deck'
+    case '.diagram':
+      return 'diagram'
+    case '.excalidraw':
+      return 'excalidraw'
+    case '.canvas':
+      return 'canvas'
+    default:
+      return 'file'
+  }
+}
+
+/**
+ * Search inside a file's content using the appropriate strategy for
+ * its extension. Returns a snippet on match, or null.
+ * @param ext The lowercase file extension.
+ * @param content The file's text content.
+ * @param query The lowercase search query.
+ * @returns A snippet string, or null if no match.
+ */
+function searchFileContent(ext: string, content: string, query: string): string | null {
+  switch (ext) {
+    case '.deck':
+      return searchDeckContent(content, query)
+    case '.diagram':
+      return searchDiagramContent(content, query)
+    case '.excalidraw':
+      return searchExcalidrawContent(content, query)
+    case '.canvas':
+      return searchCanvasContent(content, query)
+    default:
+      return searchTextContent(content, query)
+  }
 }
 
 /** Extract #hashtags from text content. Matches word-boundary #tag patterns. */

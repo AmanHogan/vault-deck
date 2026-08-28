@@ -13,6 +13,12 @@ const AUTOSAVE_DELAY = 1200
 
 interface ExcalidrawEditorProps {
   filePath: string
+  /**
+   * Pre-parsed Excalidraw data (used for Obsidian Excalidraw `.md` files
+   * where the drawing is decompressed before reaching this component).
+   * When provided, skips reading from the filesystem on initial load.
+   */
+  preloadedData?: Record<string, unknown>
 }
 
 /**
@@ -21,7 +27,10 @@ interface ExcalidrawEditorProps {
  * @param props The vault-relative file path.
  * @returns The rendered Excalidraw editor.
  */
-export function ExcalidrawEditor({ filePath }: ExcalidrawEditorProps): React.JSX.Element {
+export function ExcalidrawEditor({
+  filePath,
+  preloadedData
+}: ExcalidrawEditorProps): React.JSX.Element {
   const [initialData, setInitialData] = useState<Record<string, unknown> | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -30,7 +39,9 @@ export function ExcalidrawEditor({ filePath }: ExcalidrawEditorProps): React.JSX
   const filePathRef = useRef(filePath)
 
   // Keep ref in sync so the timer callback sees the latest path
-  useEffect(() => { filePathRef.current = filePath }, [filePath])
+  useEffect(() => {
+    filePathRef.current = filePath
+  }, [filePath])
 
   // Load file content on mount / path change
   useEffect(() => {
@@ -38,6 +49,16 @@ export function ExcalidrawEditor({ filePath }: ExcalidrawEditorProps): React.JSX
     setLoaded(false)
     setError(null)
     setInitialData(null)
+
+    // If we received pre-parsed data (e.g. from an Obsidian Excalidraw .md
+    // file), use it directly instead of reading from the filesystem.
+    if (preloadedData) {
+      setInitialData(preloadedData)
+      setLoaded(true)
+      return () => {
+        if (autosaveTimer.current) clearTimeout(autosaveTimer.current)
+      }
+    }
 
     void (async () => {
       try {
@@ -60,7 +81,7 @@ export function ExcalidrawEditor({ filePath }: ExcalidrawEditorProps): React.JSX
     return () => {
       if (autosaveTimer.current) clearTimeout(autosaveTimer.current)
     }
-  }, [filePath])
+  }, [filePath, preloadedData])
 
   /** Save current state to the vault file. */
   const save = useCallback(async () => {
@@ -78,9 +99,9 @@ export function ExcalidrawEditor({ filePath }: ExcalidrawEditorProps): React.JSX
         elements,
         appState: {
           viewBackgroundColor: appState.viewBackgroundColor,
-          gridSize: appState.gridSize ?? null,
+          gridSize: appState.gridSize ?? null
         },
-        files,
+        files
       }
 
       await window.api.vault.writeFile(filePathRef.current, JSON.stringify(data, null, 2))
@@ -116,7 +137,9 @@ export function ExcalidrawEditor({ filePath }: ExcalidrawEditorProps): React.JSX
   return (
     <div className="h-full w-full">
       <Excalidraw
-        excalidrawAPI={(api) => { apiRef.current = api }}
+        excalidrawAPI={(api) => {
+          apiRef.current = api
+        }}
         initialData={initialData ?? undefined}
         onChange={handleChange}
         theme="dark"
@@ -124,8 +147,8 @@ export function ExcalidrawEditor({ filePath }: ExcalidrawEditorProps): React.JSX
           canvasActions: {
             saveToActiveFile: false,
             loadScene: false,
-            export: { saveFileToDisk: true },
-          },
+            export: { saveFileToDisk: true }
+          }
         }}
       />
     </div>

@@ -4,7 +4,22 @@ import { pathToFileURL } from 'url'
 import fs from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { bcomm1, dcomm1, oneOnOne, actionItems, skills, fcSets, fcCards, fcSkills, imageFiles, resumeFiles, noteGroups, notes, quickAccomplishments, periodicReviews } from './database'
+import {
+  bcomm1,
+  dcomm1,
+  oneOnOne,
+  actionItems,
+  skills,
+  fcSets,
+  fcCards,
+  fcSkills,
+  imageFiles,
+  resumeFiles,
+  noteGroups,
+  notes,
+  quickAccomplishments,
+  periodicReviews
+} from './database'
 import { vault } from './vault'
 
 // ─── Performance: GPU & rendering ──────────────────────────────────────────
@@ -17,8 +32,20 @@ app.commandLine.appendSwitch('js-flags', '--jitless=false')
 
 // Register before app.whenReady
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'local', privileges: { secure: true, standard: true, supportFetchAPI: true, corsEnabled: true } },
-  { scheme: 'vault-file', privileges: { secure: true, standard: true, supportFetchAPI: true, corsEnabled: true, stream: true } }
+  {
+    scheme: 'local',
+    privileges: { secure: true, standard: true, supportFetchAPI: true, corsEnabled: true }
+  },
+  {
+    scheme: 'vault-file',
+    privileges: {
+      secure: true,
+      standard: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      stream: true
+    }
+  }
 ])
 
 // ─── Reminder state ───────────────────────────────────────────────────────────
@@ -26,7 +53,11 @@ const notifiedIntervals = new Map<number, Set<string>>()
 
 let mainWindowRef: BrowserWindow | null = null
 
-function sendReminderToRenderer(item: Record<string, unknown>, intervalKey: string, minutesBefore: number | null): void {
+function sendReminderToRenderer(
+  item: Record<string, unknown>,
+  intervalKey: string,
+  minutesBefore: number | null
+): void {
   if (!mainWindowRef || mainWindowRef.isDestroyed()) return
   mainWindowRef.webContents.send('reminder:show', {
     id: item.id,
@@ -35,7 +66,7 @@ function sendReminderToRenderer(item: Record<string, unknown>, intervalKey: stri
     dueTime: item.dueTime,
     criticality: item.criticality,
     intervalKey,
-    minutesBefore,
+    minutesBefore
   })
 }
 
@@ -45,7 +76,9 @@ function checkTimedReminders(): void {
   let items: Array<Record<string, unknown>>
   try {
     items = actionItems.getDueItems() as Array<Record<string, unknown>>
-  } catch { return }
+  } catch {
+    return
+  }
 
   for (const item of items) {
     const id = item.id as number
@@ -78,7 +111,16 @@ function checkTimedReminders(): void {
 
     if (nothingFiredYet) {
       const mins = Math.max(0, Math.round(minutesUntil))
-      const key = minutesUntil < -2.5 ? 'overdue' : minutesUntil < 2.5 ? 'due' : minutesUntil < 7.5 ? 'pre5' : minutesUntil < 12.5 ? 'pre10' : 'pre30'
+      const key =
+        minutesUntil < -2.5
+          ? 'overdue'
+          : minutesUntil < 2.5
+            ? 'due'
+            : minutesUntil < 7.5
+              ? 'pre5'
+              : minutesUntil < 12.5
+                ? 'pre10'
+                : 'pre30'
       fired.add(key)
       sendReminderToRenderer(item, key, minutesUntil < 0 ? null : mins)
     } else if (!fired.has('pre10') && minutesUntil >= 7.5 && minutesUntil < 12.5) {
@@ -105,11 +147,14 @@ function createWindow(): void {
     autoHideMenuBar: true,
     title: 'Workspace',
     titleBarStyle: 'hidden',
-    titleBarOverlay: process.platform === 'win32' ? {
-      color: '#0a0a0a',
-      symbolColor: '#a1a1aa',
-      height: 36,
-    } : undefined,
+    titleBarOverlay:
+      process.platform === 'win32'
+        ? {
+            color: '#0a0a0a',
+            symbolColor: '#a1a1aa',
+            height: 36
+          }
+        : undefined,
     trafficLightPosition: process.platform === 'darwin' ? { x: 12, y: 10 } : undefined,
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
@@ -120,7 +165,7 @@ function createWindow(): void {
       // Performance: cache compiled JS across sessions for faster startup
       v8CacheOptions: 'bypassHeatCheck',
       // Performance: throttle background tabs to save CPU
-      backgroundThrottling: true,
+      backgroundThrottling: true
     }
   })
 
@@ -142,18 +187,23 @@ function createWindow(): void {
     if (!params.misspelledWord) return
     const menu = new Menu()
     for (const suggestion of params.dictionarySuggestions.slice(0, 5)) {
-      menu.append(new MenuItem({
-        label: suggestion,
-        click: () => mainWindow.webContents.replaceMisspelling(suggestion),
-      }))
+      menu.append(
+        new MenuItem({
+          label: suggestion,
+          click: () => mainWindow.webContents.replaceMisspelling(suggestion)
+        })
+      )
     }
     if (params.dictionarySuggestions.length > 0) {
       menu.append(new MenuItem({ type: 'separator' }))
     }
-    menu.append(new MenuItem({
-      label: 'Add to Dictionary',
-      click: () => mainWindow.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord),
-    }))
+    menu.append(
+      new MenuItem({
+        label: 'Add to Dictionary',
+        click: () =>
+          mainWindow.webContents.session.addWordToSpellCheckerDictionary(params.misspelledWord)
+      })
+    )
     menu.popup()
   })
 
@@ -166,6 +216,49 @@ function createWindow(): void {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
+  }
+}
+
+/**
+ * Create a secondary window focused on a single vault file.
+ * The renderer reads the `openFile` query param on load to
+ * auto-open the file.
+ * @param filePath Vault-relative path of the file to open.
+ * @param x Screen x position for the new window.
+ * @param y Screen y position for the new window.
+ */
+function createFileWindow(filePath: string, x?: number, y?: number): void {
+  const win = new BrowserWindow({
+    width: 900,
+    height: 700,
+    x,
+    y,
+    autoHideMenuBar: true,
+    title: basename(filePath),
+    titleBarStyle: 'hidden',
+    titleBarOverlay:
+      process.platform === 'win32'
+        ? { color: '#0a0a0a', symbolColor: '#a1a1aa', height: 36 }
+        : undefined,
+    trafficLightPosition: process.platform === 'darwin' ? { x: 12, y: 10 } : undefined,
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      sandbox: false,
+      webviewTag: true,
+      spellcheck: true,
+      v8CacheOptions: 'bypassHeatCheck',
+      backgroundThrottling: true
+    }
+  })
+
+  // Pass the file to open as a query parameter the renderer reads on mount
+  const encodedFile = encodeURIComponent(filePath)
+  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+    win.loadURL(`${process.env['ELECTRON_RENDERER_URL']}?openFile=${encodedFile}`)
+  } else {
+    win.loadFile(join(__dirname, '../renderer/index.html'), {
+      query: { openFile: filePath }
+    })
   }
 }
 
@@ -215,11 +308,18 @@ app.whenReady().then(() => {
   })
 
   ipcMain.handle('files:delete', async (_, filename: string) => {
-    try { await fs.promises.unlink(join(uploadsDir, filename)) } catch { /* file may already be gone */ }
+    try {
+      await fs.promises.unlink(join(uploadsDir, filename))
+    } catch {
+      /* file may already be gone */
+    }
   })
 
   ipcMain.handle('files:openDialog', async (_, filters: Electron.FileFilter[]) => {
-    const result = await dialog.showOpenDialog({ properties: ['openFile', 'multiSelections'], filters })
+    const result = await dialog.showOpenDialog({
+      properties: ['openFile', 'multiSelections'],
+      filters
+    })
     return result.canceled ? [] : result.filePaths
   })
 
@@ -239,8 +339,12 @@ app.whenReady().then(() => {
   ipcMain.handle('dcomm1:update', (_, id, payload) => dcomm1.update(id, payload))
   ipcMain.handle('dcomm1:delete', (_, id) => dcomm1.delete(id))
   ipcMain.handle('dcomm1:getModules', (_, itemId) => dcomm1.getModules(itemId))
-  ipcMain.handle('dcomm1:createModule', (_, itemId, payload) => dcomm1.createModule(itemId, payload))
-  ipcMain.handle('dcomm1:updateModule', (_, moduleId, payload) => dcomm1.updateModule(moduleId, payload))
+  ipcMain.handle('dcomm1:createModule', (_, itemId, payload) =>
+    dcomm1.createModule(itemId, payload)
+  )
+  ipcMain.handle('dcomm1:updateModule', (_, moduleId, payload) =>
+    dcomm1.updateModule(moduleId, payload)
+  )
   ipcMain.handle('dcomm1:deleteModule', (_, moduleId) => dcomm1.deleteModule(moduleId))
 
   // ─── One on One ───────────────────────────────────────────────────────────────
@@ -263,8 +367,12 @@ app.whenReady().then(() => {
 
   // ─── Quick Accomplishments ────────────────────────────────────────────────────
   ipcMain.handle('quickAccomplishments:getAll', () => quickAccomplishments.getAll())
-  ipcMain.handle('quickAccomplishments:create', (_, payload) => quickAccomplishments.create(payload))
-  ipcMain.handle('quickAccomplishments:update', (_, id, payload) => quickAccomplishments.update(id, payload))
+  ipcMain.handle('quickAccomplishments:create', (_, payload) =>
+    quickAccomplishments.create(payload)
+  )
+  ipcMain.handle('quickAccomplishments:update', (_, id, payload) =>
+    quickAccomplishments.update(id, payload)
+  )
   ipcMain.handle('quickAccomplishments:delete', (_, id) => quickAccomplishments.delete(id))
 
   // ─── Periodic Reviews ───────────────────────────────────────────────────────
@@ -285,7 +393,9 @@ app.whenReady().then(() => {
   ipcMain.handle('fcCards:list', (_, setId) => fcCards.list(setId))
   ipcMain.handle('fcCards:create', (_, setId, payload) => fcCards.create(setId, payload))
   ipcMain.handle('fcCards:createBulk', (_, setId, payload) => fcCards.createBulk(setId, payload))
-  ipcMain.handle('fcCards:update', (_, setId, cardId, payload) => fcCards.update(setId, cardId, payload))
+  ipcMain.handle('fcCards:update', (_, setId, cardId, payload) =>
+    fcCards.update(setId, cardId, payload)
+  )
   ipcMain.handle('fcCards:toggleStar', (_, setId, cardId) => fcCards.toggleStar(setId, cardId))
   ipcMain.handle('fcCards:delete', (_, setId, cardId) => fcCards.delete(setId, cardId))
   ipcMain.handle('fcCards:getStarredGrouped', () => fcCards.getStarredGrouped())
@@ -324,22 +434,31 @@ app.whenReady().then(() => {
 
   ipcMain.handle('notes:exportNote', async (_, title: string, content: string) => {
     const safe = title.replace(/[/\\?%*:|"<>]/g, '-').trim() || 'note'
-    const result = await dialog.showSaveDialog({ defaultPath: `${safe}.md`, filters: [{ name: 'Markdown', extensions: ['md'] }] })
+    const result = await dialog.showSaveDialog({
+      defaultPath: `${safe}.md`,
+      filters: [{ name: 'Markdown', extensions: ['md'] }]
+    })
     if (result.canceled || !result.filePath) return false
     await fs.promises.writeFile(result.filePath, content, 'utf-8')
     return true
   })
 
-  ipcMain.handle('notes:exportGroup', async (_, _groupName: string, noteList: { title: string; content: string }[]) => {
-    const result = await dialog.showOpenDialog({ properties: ['openDirectory'], title: 'Choose export folder' })
-    if (result.canceled || !result.filePaths[0]) return 0
-    const dir = result.filePaths[0]
-    for (const note of noteList) {
-      const safe = note.title.replace(/[/\\?%*:|"<>]/g, '-').trim() || 'untitled'
-      await fs.promises.writeFile(join(dir, `${safe}.md`), note.content, 'utf-8')
+  ipcMain.handle(
+    'notes:exportGroup',
+    async (_, _groupName: string, noteList: { title: string; content: string }[]) => {
+      const result = await dialog.showOpenDialog({
+        properties: ['openDirectory'],
+        title: 'Choose export folder'
+      })
+      if (result.canceled || !result.filePaths[0]) return 0
+      const dir = result.filePaths[0]
+      for (const note of noteList) {
+        const safe = note.title.replace(/[/\\?%*:|"<>]/g, '-').trim() || 'untitled'
+        await fs.promises.writeFile(join(dir, `${safe}.md`), note.content, 'utf-8')
+      }
+      return noteList.length
     }
-    return noteList.length
-  })
+  )
 
   ipcMain.handle('notes:importFiles', async (_, groupId: number) => {
     const result = await dialog.showOpenDialog({
@@ -362,7 +481,9 @@ app.whenReady().then(() => {
 
   ipcMain.handle('vault:getPath', () => vault.getVaultPath())
   ipcMain.handle('vault:pick', () => vault.pickVaultFolder())
-  ipcMain.handle('vault:open', (_, vaultPath: string) => { vault.openVault(vaultPath) })
+  ipcMain.handle('vault:open', (_, vaultPath: string) => {
+    vault.openVault(vaultPath)
+  })
   ipcMain.handle('vault:getTree', () => vault.getTree())
   ipcMain.handle('vault:getAbsolutePath', (_, relPath: string) => vault.getAbsolutePath(relPath))
   ipcMain.handle('vault:readFile', (_, relPath: string) => vault.readFile(relPath))
@@ -370,11 +491,17 @@ app.whenReady().then(() => {
     const buf = await vault.readFileBinary(relPath)
     return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
   })
-  ipcMain.handle('vault:writeFile', (_, relPath: string, content: string) => vault.writeFile(relPath, content))
-  ipcMain.handle('vault:createFile', (_, relPath: string, content?: string) => vault.createFile(relPath, content))
+  ipcMain.handle('vault:writeFile', (_, relPath: string, content: string) =>
+    vault.writeFile(relPath, content)
+  )
+  ipcMain.handle('vault:createFile', (_, relPath: string, content?: string) =>
+    vault.createFile(relPath, content)
+  )
   ipcMain.handle('vault:copyFile', (_, relPath: string) => vault.copyFile(relPath))
   ipcMain.handle('vault:deleteFile', (_, relPath: string) => vault.deleteFile(relPath))
-  ipcMain.handle('vault:renameFile', (_, oldPath: string, newPath: string) => vault.renameFile(oldPath, newPath))
+  ipcMain.handle('vault:renameFile', (_, oldPath: string, newPath: string) =>
+    vault.renameFile(oldPath, newPath)
+  )
   ipcMain.handle('vault:createDirectory', (_, relPath: string) => vault.createDirectory(relPath))
   ipcMain.handle('vault:deleteDirectory', (_, relPath: string) => vault.deleteDirectory(relPath))
   ipcMain.handle('vault:search', (_, query: string, limit?: number) => vault.search(query, limit))
@@ -386,6 +513,11 @@ app.whenReady().then(() => {
   ipcMain.handle('vault:openInDefaultApp', (_, relPath: string) => {
     const absPath = vault.getAbsolutePath(relPath)
     return shell.openPath(absPath)
+  })
+
+  // ─── Window management ──────────────────────────────────────────────────────
+  ipcMain.handle('window:createFileWindow', (_, filePath: string, x?: number, y?: number) => {
+    createFileWindow(filePath, x, y)
   })
 
   // ─── JSON data transfer ───────────────────────────────────────────────────────
@@ -412,7 +544,9 @@ app.whenReady().then(() => {
   ipcMain.handle('notifications:rendererReady', () => {
     try {
       return actionItems.getUpcoming()
-    } catch { return [] }
+    } catch {
+      return []
+    }
   })
 
   setInterval(checkTimedReminders, 60 * 1000)

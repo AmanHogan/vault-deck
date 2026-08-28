@@ -11,7 +11,7 @@ import {
   useEffect,
   useCallback,
   useMemo,
-  type ReactNode,
+  type ReactNode
 } from 'react'
 import type { VaultEntry } from '@/types/types'
 
@@ -40,6 +40,10 @@ interface VaultContextValue {
   deactivateFile: () => void
   /** Switch to a specific tab */
   switchTab: (relPath: string) => void
+  /** Reorder tabs (move a tab from one index to another) */
+  reorderTabs: (fromIndex: number, toIndex: number) => void
+  /** Move a tab to a specific pane (for split view) */
+  moveTabToPane?: (tabPath: string, paneId: string) => void
 
   // ── Vault operations ──
   openVault: (path: string) => Promise<void>
@@ -80,7 +84,8 @@ export function VaultProvider({ children }: { children: ReactNode }): React.JSX.
   const [openTabs, setOpenTabs] = useState<string[]>([])
   const [activeTab, setActiveTab] = useState<string | null>(null)
 
-  // On mount: check if a vault is already stored
+  // On mount: check if a vault is already stored, and open the file
+  // from the ?openFile= query param if this is a detached tab window.
   useEffect(() => {
     void (async () => {
       const stored = await window.api.vault.getPath()
@@ -90,6 +95,15 @@ export function VaultProvider({ children }: { children: ReactNode }): React.JSX.
         setTree(t)
       }
       setReady(true)
+
+      // If opened via tab detach, auto-open the requested file
+      const params = new URLSearchParams(window.location.search)
+      const openFileParam = params.get('openFile')
+      if (openFileParam && stored) {
+        const filePath = decodeURIComponent(openFileParam)
+        setOpenTabs([filePath])
+        setActiveTab(filePath)
+      }
     })()
   }, [])
 
@@ -106,11 +120,14 @@ export function VaultProvider({ children }: { children: ReactNode }): React.JSX.
     setTree(t)
   }, [])
 
-  const openVault = useCallback(async (path: string) => {
-    await window.api.vault.open(path)
-    setVaultPath(path)
-    await refreshTree()
-  }, [refreshTree])
+  const openVault = useCallback(
+    async (path: string) => {
+      await window.api.vault.open(path)
+      setVaultPath(path)
+      await refreshTree()
+    },
+    [refreshTree]
+  )
 
   const pickAndOpenVault = useCallback(async () => {
     const picked = await window.api.vault.pick()
@@ -163,54 +180,82 @@ export function VaultProvider({ children }: { children: ReactNode }): React.JSX.
     setActiveTab(relPath)
   }, [])
 
-  const createFile = useCallback(async (relPath: string, content?: string) => {
-    const actual = await window.api.vault.createFile(relPath, content)
-    await refreshTree()
-    return actual
-  }, [refreshTree])
-
-  const createDirectory = useCallback(async (relPath: string) => {
-    await window.api.vault.createDirectory(relPath)
-    await refreshTree()
-  }, [refreshTree])
-
-  const copyFile = useCallback(async (relPath: string) => {
-    const actual = await window.api.vault.copyFile(relPath)
-    await refreshTree()
-    return actual
-  }, [refreshTree])
-
-  const deleteFile = useCallback(async (relPath: string) => {
-    await window.api.vault.deleteFile(relPath)
-    // Close the tab if it's open
-    closeTab(relPath)
-    await refreshTree()
-  }, [closeTab, refreshTree])
-
-  const deleteDirectory = useCallback(async (relPath: string) => {
-    await window.api.vault.deleteDirectory(relPath)
-    // Close any tabs inside this directory
+  /** Reorder tabs by moving from one position to another. */
+  const reorderTabs = useCallback((fromIndex: number, toIndex: number) => {
     setOpenTabs((prev) => {
-      const remaining = prev.filter((p) => !p.startsWith(relPath + '/'))
-      setActiveTab((current) => {
-        if (current && current.startsWith(relPath + '/')) {
-          return remaining.length > 0 ? remaining[remaining.length - 1] : null
-        }
-        return current
-      })
-      return remaining
+      const next = [...prev]
+      const [moved] = next.splice(fromIndex, 1)
+      next.splice(toIndex, 0, moved)
+      return next
     })
-    await refreshTree()
-  }, [refreshTree])
+  }, [])
 
-  const renameFile = useCallback(async (oldPath: string, newPath: string) => {
-    const actual = await window.api.vault.renameFile(oldPath, newPath)
-    // Update tabs to point to the new path
-    setOpenTabs((prev) => prev.map((p) => (p === oldPath ? actual : p)))
-    setActiveTab((current) => (current === oldPath ? actual : current))
-    await refreshTree()
-    return actual
-  }, [refreshTree])
+  const createFile = useCallback(
+    async (relPath: string, content?: string) => {
+      const actual = await window.api.vault.createFile(relPath, content)
+      await refreshTree()
+      return actual
+    },
+    [refreshTree]
+  )
+
+  const createDirectory = useCallback(
+    async (relPath: string) => {
+      await window.api.vault.createDirectory(relPath)
+      await refreshTree()
+    },
+    [refreshTree]
+  )
+
+  const copyFile = useCallback(
+    async (relPath: string) => {
+      const actual = await window.api.vault.copyFile(relPath)
+      await refreshTree()
+      return actual
+    },
+    [refreshTree]
+  )
+
+  const deleteFile = useCallback(
+    async (relPath: string) => {
+      await window.api.vault.deleteFile(relPath)
+      // Close the tab if it's open
+      closeTab(relPath)
+      await refreshTree()
+    },
+    [closeTab, refreshTree]
+  )
+
+  const deleteDirectory = useCallback(
+    async (relPath: string) => {
+      await window.api.vault.deleteDirectory(relPath)
+      // Close any tabs inside this directory
+      setOpenTabs((prev) => {
+        const remaining = prev.filter((p) => !p.startsWith(relPath + '/'))
+        setActiveTab((current) => {
+          if (current && current.startsWith(relPath + '/')) {
+            return remaining.length > 0 ? remaining[remaining.length - 1] : null
+          }
+          return current
+        })
+        return remaining
+      })
+      await refreshTree()
+    },
+    [refreshTree]
+  )
+
+  const renameFile = useCallback(
+    async (oldPath: string, newPath: string) => {
+      const actual = await window.api.vault.renameFile(oldPath, newPath)
+      // Update tabs to point to the new path
+      setOpenTabs((prev) => prev.map((p) => (p === oldPath ? actual : p)))
+      setActiveTab((current) => (current === oldPath ? actual : current))
+      await refreshTree()
+      return actual
+    },
+    [refreshTree]
+  )
 
   // Memoize the context value so consumers only re-render when the
   // data they depend on actually changes — not on every parent render.
@@ -227,6 +272,7 @@ export function VaultProvider({ children }: { children: ReactNode }): React.JSX.
       closeFile,
       deactivateFile,
       switchTab,
+      reorderTabs,
       openVault,
       pickAndOpenVault,
       refreshTree,
@@ -235,19 +281,32 @@ export function VaultProvider({ children }: { children: ReactNode }): React.JSX.
       copyFile,
       deleteFile,
       deleteDirectory,
-      renameFile,
+      renameFile
     }),
     [
-      vaultPath, ready, tree, openTabs, activeTab,
-      openFile, closeTab, closeAllTabs, closeFile, deactivateFile,
-      switchTab, openVault, pickAndOpenVault, refreshTree,
-      createFile, createDirectory, copyFile, deleteFile, deleteDirectory, renameFile,
-    ],
+      vaultPath,
+      ready,
+      tree,
+      openTabs,
+      activeTab,
+      openFile,
+      closeTab,
+      closeAllTabs,
+      closeFile,
+      deactivateFile,
+      switchTab,
+      reorderTabs,
+      openVault,
+      pickAndOpenVault,
+      refreshTree,
+      createFile,
+      createDirectory,
+      copyFile,
+      deleteFile,
+      deleteDirectory,
+      renameFile
+    ]
   )
 
-  return (
-    <VaultContext.Provider value={contextValue}>
-      {children}
-    </VaultContext.Provider>
-  )
+  return <VaultContext.Provider value={contextValue}>{children}</VaultContext.Provider>
 }

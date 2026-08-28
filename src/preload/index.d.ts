@@ -113,8 +113,14 @@ interface DbApi {
     update: (id: number, payload: unknown) => Promise<unknown>
     delete: (id: number) => Promise<void>
     exportNote: (title: string, content: string) => Promise<boolean>
-    exportGroup: (groupName: string, noteList: { title: string; content: string }[]) => Promise<number>
+    exportGroup: (
+      groupName: string,
+      noteList: { title: string; content: string }[]
+    ) => Promise<number>
     importFiles: (groupId: number) => Promise<unknown[]>
+  }
+  window: {
+    createFileWindow: (filePath: string, x?: number, y?: number) => Promise<void>
   }
   vault: {
     getPath: () => Promise<string | null>
@@ -131,7 +137,10 @@ interface DbApi {
     renameFile: (oldPath: string, newPath: string) => Promise<string>
     createDirectory: (relPath: string) => Promise<void>
     deleteDirectory: (relPath: string) => Promise<void>
-    search: (query: string, limit?: number) => Promise<{ path: string; name: string; type: string; snippet: string }[]>
+    search: (
+      query: string,
+      limit?: number
+    ) => Promise<{ path: string; name: string; type: string; snippet: string }[]>
     getTags: () => Promise<{ tag: string; files: string[]; count: number }[]>
     showInExplorer: (relPath: string) => Promise<void>
     openInDefaultApp: (relPath: string) => Promise<string>

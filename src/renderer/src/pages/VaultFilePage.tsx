@@ -17,6 +17,7 @@
 
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
 import { useVault } from '@/lib/vault-context'
+import { isObsidianExcalidraw, parseObsidianExcalidraw } from '@/lib/obsidian-excalidraw'
 import { Markdown } from '@/components/markdown'
 import { Save, Eye, EyeOff, ExternalLink, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react'
 
@@ -27,25 +28,25 @@ import { Save, Eye, EyeOff, ExternalLink, ZoomIn, ZoomOut, RotateCcw } from 'luc
 // into the initial page load.
 
 const CodeMirrorEditor = lazy(() =>
-  import('@/components/codemirror-editor').then((m) => ({ default: m.CodeMirrorEditor })),
+  import('@/components/codemirror-editor').then((m) => ({ default: m.CodeMirrorEditor }))
 )
 const DiagramCanvas = lazy(() =>
-  import('@/components/diagram/diagram-canvas').then((m) => ({ default: m.DiagramCanvas })),
+  import('@/components/diagram/diagram-canvas').then((m) => ({ default: m.DiagramCanvas }))
 )
 const DeckEditor = lazy(() =>
-  import('@/components/deck-editor').then((m) => ({ default: m.DeckEditor })),
+  import('@/components/deck-editor').then((m) => ({ default: m.DeckEditor }))
 )
 const DocxViewer = lazy(() =>
-  import('@/components/docx-viewer').then((m) => ({ default: m.DocxViewer })),
+  import('@/components/docx-viewer').then((m) => ({ default: m.DocxViewer }))
 )
 const XlsxViewer = lazy(() =>
-  import('@/components/xlsx-viewer').then((m) => ({ default: m.XlsxViewer })),
+  import('@/components/xlsx-viewer').then((m) => ({ default: m.XlsxViewer }))
 )
 const ExcalidrawEditor = lazy(() =>
-  import('@/components/excalidraw-editor').then((m) => ({ default: m.ExcalidrawEditor })),
+  import('@/components/excalidraw-editor').then((m) => ({ default: m.ExcalidrawEditor }))
 )
 const CanvasEditor = lazy(() =>
-  import('@/components/canvas/canvas-editor').then((m) => ({ default: m.CanvasEditor })),
+  import('@/components/canvas/canvas-editor').then((m) => ({ default: m.CanvasEditor }))
 )
 
 /** Loading fallback shown while a lazy editor chunk loads. */
@@ -63,18 +64,35 @@ const AUTOSAVE_DELAY = 1000
 const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'])
 const SPREADSHEET_EXTS = new Set(['.xlsx', '.xls', '.csv'])
 
+interface VaultFilePageProps {
+  /** When provided, overrides the vault context's openFilePath (for split panes). */
+  overrideFilePath?: string
+}
+
 /**
  * Full-featured file editor page rendered when a vault file is open.
+ * When used inside a split pane, accepts overrideFilePath so each
+ * pane can independently display a different file.
+ * @param props Optional overrideFilePath for multi-pane layouts.
  * @returns The rendered editor, or null when no file is open.
  */
-export default function VaultFilePage(): React.JSX.Element | null {
-  const { openFilePath } = useVault()
+export default function VaultFilePage({
+  overrideFilePath
+}: VaultFilePageProps): React.JSX.Element | null {
+  const { openFilePath: contextFilePath } = useVault()
+  const openFilePath = overrideFilePath ?? contextFilePath
   const [content, setContent] = useState('')
   const [diskContent, setDiskContent] = useState('')
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [loaded, setLoaded] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [showPreview, setShowPreview] = useState(true)
+  /** If this .md file is actually an Obsidian Excalidraw file, holds the decompressed scene data. */
+  const [obsidianExcalidrawData, setObsidianExcalidrawData] = useState<Record<
+    string,
+    unknown
+  > | null>(null)
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const ext = openFilePath ? '.' + (openFilePath.split('.').pop()?.toLowerCase() ?? '') : ''
@@ -105,6 +123,8 @@ export default function VaultFilePage(): React.JSX.Element | null {
     }
     setLoaded(false)
     setDirty(false)
+    setLoadError(null)
+    setObsidianExcalidrawData(null)
     void (async () => {
       try {
         // Only read text content for editable files (not binary previews)
@@ -112,9 +132,21 @@ export default function VaultFilePage(): React.JSX.Element | null {
           const text = await window.api.vault.readFile(openFilePath)
           setContent(text)
           setDiskContent(text)
+
+          // Detect Obsidian Excalidraw .md files — these contain compressed
+          // drawing data and should be rendered with the Excalidraw editor
+          // instead of CodeMirror.
+          if (isMarkdown && isObsidianExcalidraw(text)) {
+            const parsed = parseObsidianExcalidraw(text)
+            if (parsed) {
+              setObsidianExcalidrawData(parsed)
+            }
+          }
         }
       } catch (err) {
         console.error('Failed to read file:', err)
+        const msg = err instanceof Error ? err.message : 'Failed to read file'
+        setLoadError(msg)
         setContent('')
         setDiskContent('')
       }
@@ -154,26 +186,29 @@ export default function VaultFilePage(): React.JSX.Element | null {
    * Handle content changes from the editor — mark dirty and schedule
    * an auto-save after the debounce delay.
    */
-  const handleChange = useCallback((newContent: string) => {
-    setContent(newContent)
-    setDirty(true)
-    if (autosaveTimer.current) clearTimeout(autosaveTimer.current)
-    autosaveTimer.current = setTimeout(() => {
-      setSaving(true)
-      void (async () => {
-        try {
-          if (openFilePath) {
-            await window.api.vault.writeFile(openFilePath, newContent)
-            setDiskContent(newContent)
-            setDirty(false)
+  const handleChange = useCallback(
+    (newContent: string) => {
+      setContent(newContent)
+      setDirty(true)
+      if (autosaveTimer.current) clearTimeout(autosaveTimer.current)
+      autosaveTimer.current = setTimeout(() => {
+        setSaving(true)
+        void (async () => {
+          try {
+            if (openFilePath) {
+              await window.api.vault.writeFile(openFilePath, newContent)
+              setDiskContent(newContent)
+              setDirty(false)
+            }
+          } catch (err) {
+            console.error('Autosave failed:', err)
           }
-        } catch (err) {
-          console.error('Autosave failed:', err)
-        }
-        setSaving(false)
-      })()
-    }, AUTOSAVE_DELAY)
-  }, [openFilePath])
+          setSaving(false)
+        })()
+      }, AUTOSAVE_DELAY)
+    },
+    [openFilePath]
+  )
 
   // Clean up autosave timer on unmount
   useEffect(() => {
@@ -183,6 +218,17 @@ export default function VaultFilePage(): React.JSX.Element | null {
   }, [])
 
   if (!openFilePath) return null
+
+  // ── Obsidian Excalidraw .md file (compressed drawing inside markdown) ──
+  if (obsidianExcalidrawData) {
+    return (
+      <Suspense fallback={<EditorFallback />}>
+        <div className="flex-1 overflow-hidden">
+          <ExcalidrawEditor filePath={openFilePath} preloadedData={obsidianExcalidrawData} />
+        </div>
+      </Suspense>
+    )
+  }
 
   // ── Diagram ──
   if (isDiagram) {
@@ -232,30 +278,32 @@ export default function VaultFilePage(): React.JSX.Element | null {
   if (isPdf && vaultFileUrl) {
     return (
       <div className="flex-1 overflow-hidden">
-        <iframe
-          src={vaultFileUrl}
-          className="h-full w-full border-0"
-          title={openFilePath}
-        />
+        <iframe src={vaultFileUrl} className="h-full w-full border-0" title={openFilePath} />
       </div>
     )
   }
 
   // ── Image preview with zoom & pan ──
   if (isImage && vaultFileUrl) {
-    return (
-      <ImageViewer src={vaultFileUrl} alt={openFilePath.split('/').pop() ?? ''} />
-    )
+    return <ImageViewer src={vaultFileUrl} alt={openFilePath.split('/').pop() ?? ''} />
   }
 
   // ── DOCX — inline preview via docx-preview ──
   if (isDocx) {
-    return <Suspense fallback={<EditorFallback />}><DocxViewer filePath={openFilePath} /></Suspense>
+    return (
+      <Suspense fallback={<EditorFallback />}>
+        <DocxViewer filePath={openFilePath} />
+      </Suspense>
+    )
   }
 
   // ── Spreadsheet (XLSX/XLS/CSV) — inline preview via SheetJS ──
   if (isSpreadsheet) {
-    return <Suspense fallback={<EditorFallback />}><XlsxViewer filePath={openFilePath} /></Suspense>
+    return (
+      <Suspense fallback={<EditorFallback />}>
+        <XlsxViewer filePath={openFilePath} />
+      </Suspense>
+    )
   }
 
   // ── PPTX — no inline renderer, offer to open externally ──
@@ -266,8 +314,30 @@ export default function VaultFilePage(): React.JSX.Element | null {
         <div className="flex flex-col items-center gap-4 rounded-xl border-2 border-border/60 bg-card p-10 text-center">
           <p className="text-lg font-semibold">{pptxName}</p>
           <p className="max-w-sm text-sm text-muted-foreground">
-            PowerPoint files can&rsquo;t be previewed inline. Open it in Keynote or PowerPoint to view or edit.
+            PowerPoint files can&rsquo;t be previewed inline. Open it in Keynote or PowerPoint to
+            view or edit.
           </p>
+          <button
+            type="button"
+            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            onClick={() => void window.api.vault.openInDefaultApp(openFilePath)}
+          >
+            <ExternalLink className="h-4 w-4" />
+            Open in default app
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Error card (binary file, too large, or unreadable) ──
+  if (loadError) {
+    const errFileName = openFilePath.split('/').pop() ?? openFilePath
+    return (
+      <div className="flex flex-1 items-center justify-center">
+        <div className="flex flex-col items-center gap-4 rounded-xl border-2 border-border/60 bg-card p-10 text-center">
+          <p className="text-lg font-semibold">{errFileName}</p>
+          <p className="max-w-sm text-sm text-muted-foreground">{loadError}</p>
           <button
             type="button"
             className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
@@ -314,7 +384,9 @@ export default function VaultFilePage(): React.JSX.Element | null {
             {saving ? 'Saving…' : 'Save'}
           </button>
         )}
-        {dirty && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" title="Unsaved changes" />}
+        {dirty && (
+          <span className="h-2 w-2 shrink-0 rounded-full bg-primary" title="Unsaved changes" />
+        )}
         {saving && !dirty && <span className="text-xs text-muted-foreground">Saved</span>}
       </div>
 
@@ -460,7 +532,7 @@ function ImageViewer({ src, alt }: { src: string; alt: string }): React.JSX.Elem
           style={{
             transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
             transformOrigin: 'center center',
-            transition: dragging.current ? 'none' : 'transform 0.1s ease-out',
+            transition: dragging.current ? 'none' : 'transform 0.1s ease-out'
           }}
         >
           <img
