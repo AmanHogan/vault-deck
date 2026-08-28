@@ -10,20 +10,42 @@
 import { decompressFromBase64 } from 'lz-string'
 
 /**
- * Check whether a markdown string is an Obsidian Excalidraw file by
- * looking for the `excalidraw-plugin` frontmatter key.
+ * Check whether a file path looks like an Obsidian Excalidraw file
+ * based on its name (e.g. `drawing.excalidraw.md`).
+ * @param filePath The vault-relative file path.
+ * @returns True if the filename matches the `.excalidraw.md` pattern.
+ */
+export function isExcalidrawFilename(filePath: string): boolean {
+  return /\.excalidraw\.md$/i.test(filePath)
+}
+
+/**
+ * Check whether a markdown string is an Obsidian Excalidraw file.
+ * Uses multiple detection strategies:
+ * 1. `excalidraw-plugin` key in YAML frontmatter (any value)
+ * 2. Presence of a `compressed-json` code fence
+ * 3. Presence of the `%% Drawing` comment block
  * @param content The raw markdown text.
  * @returns True if this is an Obsidian Excalidraw `.md` file.
  */
 export function isObsidianExcalidraw(content: string): boolean {
-  // Quick check before doing any parsing
-  if (!content.includes('excalidraw-plugin')) return false
+  // Quick bail-out: must mention excalidraw somewhere
+  if (!content.includes('excalidraw')) return false
 
-  // Check YAML frontmatter
-  const fmMatch = content.match(/^---\s*\n([\s\S]*?)\n---/)
-  if (!fmMatch) return false
+  // Strategy 1: check YAML frontmatter for excalidraw-plugin key (any value)
+  // Handle both \n and \r\n line endings
+  const fmMatch = content.match(/^---[ \t]*\r?\n([\s\S]*?)\r?\n---/)
+  if (fmMatch && /excalidraw-plugin\s*:/.test(fmMatch[1])) return true
 
-  return /excalidraw-plugin:\s*(parsed|raw)/.test(fmMatch[1])
+  // Strategy 2: presence of the compressed-json code fence
+  if (/```compressed-json/i.test(content)) return true
+
+  // Strategy 3: the %% Drawing comment block that wraps the data
+  if (/^%%\s*\r?\n/.test(content) || /\n%%\s*\r?\n/.test(content)) {
+    if (content.includes('Drawing')) return true
+  }
+
+  return false
 }
 
 /**
@@ -33,31 +55,55 @@ export function isObsidianExcalidraw(content: string): boolean {
  * @returns The parsed Excalidraw scene data, or null if extraction fails.
  */
 export function parseObsidianExcalidraw(content: string): Record<string, unknown> | null {
-  // Extract the compressed-json code block
-  const compressedMatch = content.match(/```compressed-json\s*\n([\s\S]*?)\n```/)
-  if (!compressedMatch) {
-    // Try raw JSON (older format without compression)
-    const jsonMatch = content.match(/```json\s*\n([\s\S]*?)\n```/)
-    if (jsonMatch) {
-      try {
-        return JSON.parse(jsonMatch[1]) as Record<string, unknown>
-      } catch {
-        return null
+  // Normalise line endings so all regexes can use \n
+  const text = content.replace(/\r\n/g, '\n')
+
+  // Try compressed-json code block first (most common modern format)
+  const compressedMatch = text.match(/```compressed-json\s*\n([\s\S]*?)\n\s*```/)
+  if (compressedMatch) {
+    const compressed = compressedMatch[1].trim()
+    try {
+      const decompressed = decompressFromBase64(compressed)
+      if (decompressed) {
+        return JSON.parse(decompressed) as Record<string, unknown>
       }
+    } catch (err) {
+      console.error('Failed to decompress Obsidian Excalidraw data:', err)
     }
-    return null
   }
 
-  // Decompress the LZ-string base64 data
-  const compressed = compressedMatch[1].trim()
-  try {
-    const decompressed = decompressFromBase64(compressed)
-    if (!decompressed) return null
-    return JSON.parse(decompressed) as Record<string, unknown>
-  } catch (err) {
-    console.error('Failed to decompress Obsidian Excalidraw data:', err)
-    return null
+  // Try raw JSON code block (older format without compression)
+  const jsonMatch = text.match(/```json\s*\n([\s\S]*?)\n\s*```/)
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[1]) as Record<string, unknown>
+      // Sanity check: an Excalidraw scene has a "type" field
+      if (parsed.type === 'excalidraw' || parsed.elements) return parsed
+    } catch {
+      // Not valid JSON — fall through
+    }
   }
+
+  // Try extracting JSON directly from the %% Drawing block
+  const drawingMatch = text.match(/%%\s*\n([\s\S]*?)\n\s*%%/)
+  if (drawingMatch) {
+    const inner = drawingMatch[1].trim()
+    // Might contain a code fence inside, or might be bare JSON/compressed data
+    const innerCompressed = inner.match(/```compressed-json\s*\n([\s\S]*?)\n\s*```/)
+    if (innerCompressed) {
+      try {
+        const decompressed = decompressFromBase64(innerCompressed[1].trim())
+        if (decompressed) {
+          return JSON.parse(decompressed) as Record<string, unknown>
+        }
+      } catch {
+        // fall through
+      }
+    }
+  }
+
+  console.warn('Obsidian Excalidraw file detected but could not parse drawing data')
+  return null
 }
 
 /**
@@ -67,7 +113,8 @@ export function parseObsidianExcalidraw(content: string): Record<string, unknown
  * @returns Array of text element strings, or empty array.
  */
 export function extractTextElements(content: string): string[] {
-  const match = content.match(/## Text Elements\s*\n([\s\S]*?)\n%%/)
+  const text = content.replace(/\r\n/g, '\n')
+  const match = text.match(/## Text Elements\s*\n([\s\S]*?)\n%%/)
   if (!match) return []
 
   return match[1]

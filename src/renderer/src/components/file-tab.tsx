@@ -270,9 +270,9 @@ export function FileTab(): React.JSX.Element {
   }, [])
 
   /**
-   * On drag end: if dropped on another tab, reorder. If dropped outside
-   * the window bounds entirely (and there's more than one tab), detach
-   * the tab into a new Electron window.
+   * On drag end: compute the final pointer position. If it landed outside
+   * the window bounds (and there are 2+ tabs), detach the tab into a new
+   * Electron window. Otherwise do the normal reorder.
    */
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
@@ -280,37 +280,33 @@ export function FileTab(): React.JSX.Element {
       const draggedTab = draggingTabRef.current
       draggingTabRef.current = null
 
+      // Compute where the pointer actually ended up
+      const pointerEvent = event.activatorEvent as PointerEvent | MouseEvent | undefined
+      const delta = event.delta
+      if (draggedTab && pointerEvent && delta && openTabs.length > 1) {
+        const dropX = pointerEvent.clientX + delta.x
+        const dropY = pointerEvent.clientY + delta.y
+
+        const outsideWindow =
+          dropX < 0 || dropY < 0 || dropX > window.innerWidth || dropY > window.innerHeight
+
+        if (outsideWindow) {
+          // Convert to screen coordinates for the new window position
+          const screenX = window.screenX + dropX
+          const screenY = window.screenY + dropY
+
+          closeTab(draggedTab)
+          void window.api.window.createFileWindow(draggedTab, screenX, screenY)
+          return
+        }
+      }
+
       // Normal reorder within the tab bar
       if (over && active.id !== over.id) {
         const oldIndex = openTabs.indexOf(String(active.id))
         const newIndex = openTabs.indexOf(String(over.id))
         if (oldIndex !== -1 && newIndex !== -1) {
           reorderTabs(oldIndex, newIndex)
-        }
-        return
-      }
-
-      // Detach: dropped with no target and we have the pointer coordinates
-      if (!over && draggedTab && openTabs.length > 1) {
-        const pointerEvent = event.activatorEvent as PointerEvent | MouseEvent | undefined
-        const delta = event.delta
-        if (pointerEvent && delta) {
-          const dropX = pointerEvent.clientX + delta.x
-          const dropY = pointerEvent.clientY + delta.y
-
-          // Check if the drop point is outside the visible window area
-          const outsideWindow =
-            dropX < 0 || dropY < 0 || dropX > window.innerWidth || dropY > window.innerHeight
-
-          if (outsideWindow) {
-            // Convert to screen coordinates for the new window position
-            const screenX = window.screenX + dropX
-            const screenY = window.screenY + dropY
-
-            // Close the tab in this window, open in a new one
-            closeTab(draggedTab)
-            void window.api.window.createFileWindow(draggedTab, screenX, screenY)
-          }
         }
       }
     },

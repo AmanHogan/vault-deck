@@ -17,7 +17,11 @@
 
 import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react'
 import { useVault } from '@/lib/vault-context'
-import { isObsidianExcalidraw, parseObsidianExcalidraw } from '@/lib/obsidian-excalidraw'
+import {
+  isObsidianExcalidraw,
+  isExcalidrawFilename,
+  parseObsidianExcalidraw
+} from '@/lib/obsidian-excalidraw'
 import { Markdown } from '@/components/markdown'
 import { Save, Eye, EyeOff, ExternalLink, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react'
 
@@ -135,8 +139,9 @@ export default function VaultFilePage({
 
           // Detect Obsidian Excalidraw .md files — these contain compressed
           // drawing data and should be rendered with the Excalidraw editor
-          // instead of CodeMirror.
-          if (isMarkdown && isObsidianExcalidraw(text)) {
+          // instead of CodeMirror. Check by content AND by filename pattern
+          // (*.excalidraw.md) for maximum compatibility.
+          if (isMarkdown && (isObsidianExcalidraw(text) || isExcalidrawFilename(openFilePath))) {
             const parsed = parseObsidianExcalidraw(text)
             if (parsed) {
               setObsidianExcalidrawData(parsed)
